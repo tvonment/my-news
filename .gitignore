@@ -1,0 +1,45 @@
+# Azure
+.azure/
+*.azurewebsite.publishsettings
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Azure Functions
+backend/local.settings.json
+backend/bin/
+backend/obj/
+backend/.python_packages/
+
+# Secrets — never commit these
+*.p8
+*.p12
+*.mobileprovision
+.env
+.env.*
+!.env.example
+
+# Xcode
+ios/**/xcuserdata/
+ios/**/DerivedData/
+ios/**/*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+ios/**/.DS_Store
+*.xcuserstate
+
+# macOS
+.DS_Store
+
+# Local scratch
+scratch/
+*.local.json
+
+# Tooling session state
+.omc/
+**/.omc/

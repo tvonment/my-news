@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+name: mynews
+metadata:
+  template: mynews@0.1.0
+
+services:
+  backend:
+    project: ./backend
+    language: py
+    host: function
+
+hooks:
+  postprovision:
+    posix:
+      shell: sh
+      continueOnError: false
+      interactive: true
+      run: ./scripts/postprovision.sh

@@ -1,0 +1,298 @@
+# Seed feed list. Every URL here was live-fetched and verified on 2026-07-27.
+#
+# This file is the bootstrap only — once the settings screen lands (M5) the live
+# list is the `sources` document in Cosmos and this becomes the default applied
+# to a fresh install.
+#
+# Fields:
+#   poll_minutes      how often the harvest timer should consider this feed.
+#                     Short-window feeds (10 items) need frequent polls or
+#                     stories roll off before we ever see them.
+#   stale_after_hours how long without a new item before the feed is flagged as
+#                     a zombie. news.microsoft.com/feed/ returns HTTP 200 with a
+#                     fresh Last-Modified but has not published since May 2025,
+#                     so status codes prove nothing.
+#   full_text         whether the feed body is usable as-is, or the article page
+#                     must be fetched to summarize.
+
+version: 1
+
+defaults:
+  poll_minutes: 60
+  stale_after_hours: 72
+  full_text: false
+
+sources:
+  # --- Microsoft ------------------------------------------------------------
+  - id: ms-official
+    name: The Official Microsoft Blog
+    url: https://blogs.microsoft.com/feed/
+    category: microsoft
+    lang: en
+    full_text: true
+    stale_after_hours: 168
+  - id: ms-source
+    name: Microsoft Source
+    url: https://news.microsoft.com/source/feed/
+    category: microsoft
+    lang: en
+    stale_after_hours: 168
+  - id: azure-blog
+    name: Azure Blog
+    url: https://azure.microsoft.com/en-us/blog/feed/
+    category: microsoft
+    lang: en
+    full_text: true
+    stale_after_hours: 168
+    # ~22k chars per item — the richest feed in the whole list.
+  - id: azure-updates
+    name: Azure service updates
+    url: https://www.microsoft.com/releasecommunications/api/v2/azure/rss
+    category: microsoft
+    lang: en
+    stale_after_hours: 48
+    # Descriptions are hard-truncated at exactly 255 chars, often mid-word, and
+    # the feed sends no validator at all. Titles carry useful "[In preview]" /
+    # "Public Preview:" prefixes worth parsing.
+  - id: ms-research
+    name: Microsoft Research
+    url: https://www.microsoft.com/en-us/research/feed/
+    category: ai
+    lang: en
+    full_text: true
+    stale_after_hours: 720
+    # 30 days, not 14: a live probe found the newest item 352h old, which tripped
+    # the zombie check on a blog that is simply low-frequency, not dead.
+  - id: dotnet-blog
+    name: .NET Blog
+    url: https://devblogs.microsoft.com/dotnet/feed/
+    category: dev
+    lang: en
+    full_text: true
+    stale_after_hours: 168
+  - id: windows-blog
+    name: Windows Blog
+    url: https://blogs.windows.com/feed/
+    category: microsoft
+    lang: en
+    poll_minutes: 30
+    stale_after_hours: 168
+    # 10-item window.
+
+  # --- Apple official -------------------------------------------------------
+  - id: apple-newsroom
+    name: Apple Newsroom
+    url: https://www.apple.com/newsroom/rss-feed.rss
+    category: apple
+    lang: en
+    stale_after_hours: 168
+    # Atom, despite the .rss filename and the application/rss+xml Content-Type.
+  - id: apple-dev-news
+    name: Apple Developer News
+    url: https://developer.apple.com/news/rss/news.rss
+    category: apple
+    lang: en
+    stale_after_hours: 336
+    enabled: false
+    # DISABLED 2026-07-28: returns HTTP 500 for every User-Agent and header
+    # combination tried, including the Safari UA that worked during the
+    # 2026-07-27 survey. developer.apple.com/news/ still advertises this exact
+    # URL via <link rel="alternate">, and the sibling releases feed returns 200,
+    # so this is breakage on Apple's side rather than a wrong URL. The Safari
+    # override in core/config.py is kept for when it comes back; re-enable after
+    # `scripts/probe_feeds.py apple-dev-news` reports ok.
+  - id: apple-dev-releases
+    name: Apple Developer Releases
+    url: https://developer.apple.com/news/releases/rss/releases.rss
+    category: apple
+    lang: en
+    stale_after_hours: 336
+    # Sends an EMPTY Last-Modified header and no ETag: body-hash only.
+  - id: apple-ml
+    name: Apple Machine Learning Research
+    url: https://machinelearning.apple.com/rss.xml
+    category: ai
+    lang: en
+    stale_after_hours: 336
+
+  # --- Anthropic ------------------------------------------------------------
+  # Anthropic publishes NO official feed: every candidate path 404s and the HTML
+  # carries no <link rel="alternate">. These are third-party mirrors, so the
+  # zombie check matters more here than anywhere else in the list.
+  - id: anthropic-mirror
+    name: Anthropic (community mirror)
+    url: https://tim-hilde.github.io/anthropic-rss/rss.xml
+    category: ai
+    lang: en
+    full_text: true
+    stale_after_hours: 168
+  - id: claude-status
+    name: Claude status
+    url: https://status.claude.com/history.atom
+    category: ai
+    lang: en
+    stale_after_hours: 720
+
+  # --- AI neighbours --------------------------------------------------------
+  - id: openai-news
+    name: OpenAI News
+    url: https://openai.com/news/rss.xml
+    category: ai
+    lang: en
+    stale_after_hours: 168
+    # 1,051 items / 638 KB per fetch and no validators — the item cap earns its
+    # keep here. Consider a longer poll interval if bandwidth ever matters.
+    poll_minutes: 180
+  - id: deepmind
+    name: Google DeepMind
+    url: https://deepmind.google/blog/rss.xml
+    category: ai
+    lang: en
+    stale_after_hours: 336
+  - id: google-ai
+    name: Google AI
+    url: https://blog.google/innovation-and-ai/technology/ai/rss/
+    category: ai
+    lang: en
+    stale_after_hours: 336
+  - id: huggingface
+    name: Hugging Face Blog
+    url: https://huggingface.co/blog/feed.xml
+    category: ai
+    lang: en
+    stale_after_hours: 336
+    # Title-only: the items carry no <description> or content:encoded at all, so
+    # anything beyond the headline requires fetching the page.
+
+  # --- Apple rumors ---------------------------------------------------------
+  - id: sixcolors
+    name: Six Colors
+    url: https://sixcolors.com/feed/
+    category: apple-rumors
+    lang: en
+    full_text: true
+    stale_after_hours: 96
+  - id: daringfireball
+    name: Daring Fireball
+    url: https://daringfireball.net/feeds/main
+    category: apple-rumors
+    lang: en
+    full_text: true
+    stale_after_hours: 96
+  - id: macrumors
+    name: MacRumors
+    url: https://feeds.macrumors.com/MacRumors-All
+    category: apple-rumors
+    lang: en
+    poll_minutes: 30
+    stale_after_hours: 24
+  - id: appleinsider
+    name: AppleInsider
+    url: https://appleinsider.com/rss/news/
+    category: apple-rumors
+    lang: en
+    stale_after_hours: 24
+  - id: 9to5mac
+    name: 9to5Mac
+    url: https://9to5mac.com/feed/
+    category: apple-rumors
+    lang: en
+    stale_after_hours: 24
+  - id: gurman
+    name: Mark Gurman (Bloomberg)
+    url: https://www.bloomberg.com/authors/AS7Hj1mBMGM/mark-gurman.rss
+    category: apple-rumors
+    lang: en
+    stale_after_hours: 336
+    # Descriptions are empty — titles and links only — and the articles are
+    # paywalled. Kept for the signal; MacRumors/9to5Mac recap Power On anyway.
+
+  # --- Tech, German + English ----------------------------------------------
+  - id: heise
+    name: heise online
+    url: https://www.heise.de/rss/heise-atom.xml
+    category: tech
+    lang: de
+    stale_after_hours: 12
+    # Paywalled items are title-prefixed "heise+ | " and get filtered downstream.
+  - id: heise-developer
+    name: heise Developer
+    url: https://www.heise.de/developer/feed.xml
+    category: dev
+    lang: de
+    stale_after_hours: 72
+  - id: arstechnica
+    name: Ars Technica
+    url: https://feeds.arstechnica.com/arstechnica/index
+    category: tech
+    lang: en
+    stale_after_hours: 24
+  - id: theverge
+    name: The Verge
+    url: https://www.theverge.com/rss/index.xml
+    category: tech
+    lang: en
+    poll_minutes: 30
+    stale_after_hours: 12
+    # Atom, and only 10 entries — a busy day rolls the window in hours.
+  - id: techcrunch
+    name: TechCrunch
+    url: https://techcrunch.com/feed/
+    category: tech
+    lang: en
+    stale_after_hours: 24
+  - id: wired
+    name: WIRED
+    url: https://www.wired.com/feed/rss
+    category: tech
+    lang: en
+    stale_after_hours: 48
+  - id: hn
+    name: Hacker News (100+ points)
+    url: https://hnrss.org/frontpage?points=100
+    category: tech
+    lang: en
+    stale_after_hours: 24
+
+  # --- International news ---------------------------------------------------
+  - id: guardian-world
+    name: The Guardian — World
+    url: https://www.theguardian.com/world/rss
+    category: world
+    lang: en
+    stale_after_hours: 12
+    # Richest teasers of the international set at ~792 chars.
+  - id: bbc-world
+    name: BBC News — World
+    url: https://feeds.bbci.co.uk/news/world/rss.xml
+    category: world
+    lang: en
+    stale_after_hours: 12
+  - id: nyt
+    name: The New York Times
+    url: https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml
+    category: world
+    lang: en
+    stale_after_hours: 12
+  - id: aljazeera
+    name: Al Jazeera
+    url: https://www.aljazeera.com/xml/rss/all.xml
+    category: world
+    lang: en
+    stale_after_hours: 12
+  - id: npr
+    name: NPR
+    url: https://feeds.npr.org/1001/rss.xml
+    category: world
+    lang: en
+    poll_minutes: 30
+    stale_after_hours: 24
+    # 10-item window.
+
+# Verified broken on 2026-07-27 — do not re-add without re-testing:
+#   https://news.microsoft.com/feed/                 HTTP 200 but frozen since 2025-05-07
+#   https://azure.microsoft.com/en-us/updates/feed/  302s to a 195 KB HTML page
+#   https://www.anthropic.com/{rss,feed,atom}.xml    all 404, no feed exists
+#   https://www.bloomberg.com/authors/AR3OYuAmvcU/mark-gurman.rss  HTTP 500, wrong author id
+#   https://feeds.macrumors.com/MacRumors-Front      byte-identical to MacRumors-All
+#   https://www.reddit.com/r/*/.rss                  429s on the second request
