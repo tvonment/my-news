@@ -11,9 +11,9 @@ volume, against a $99/year Apple Developer Program membership that costs more th
 
 | Milestone | State |
 |---|---|
-| M0 — infra, health endpoint | code complete, **not yet deployed** |
-| M1 — harvest: fetch, dedupe, persist | code complete |
-| M2 — embeddings gate, scoring, summaries | not started |
+| M0 — infra, health endpoint | **live** in Switzerland North |
+| M1 — harvest: fetch, dedupe, persist | **live** — 34 feeds, 1,348 articles on first run |
+| M2 — embeddings gate, scoring, summaries | **live** — first digest cost $0.09 |
 | M3 — iOS app v1 | not started |
 | M4 — feedback loop | not started |
 | M5 — in-app settings | not started |
@@ -72,14 +72,25 @@ Azure OpenAI has **no hard spend limit**. The brakes are the budget alert in Bic
 
 ## Models
 
-`gpt-5.6-luna` for bulk scoring ($1.00/$6.00 per 1M), `gpt-5.6-terra` for summaries
-($2.50/$15.00), `text-embedding-3-small` at 512 dims for the gate. There is **no bare `gpt-5.6`**
-on Azure — luna/terra/sol are real model names, not size codenames.
+Deployed: **`gpt-5-nano`** for bulk scoring ($0.05/$0.40 per 1M), **`gpt-5.4`** for summaries
+($2.50/$15.00), `text-embedding-3-small` at 512 dims for the gate.
 
-All three retire **2027-07-09**, which is the longest runway anything in the catalog offers:
-Foundry runs OpenAI models on a 12-month GA lifecycle. Deployment names are config
-(`MODEL_SCORER`, `MODEL_SUMMARIZER`), and `scripts/eval.py` plus the JSON schema are the stable
-contract across a swap.
+The plan called for `gpt-5.6-luna`/`terra`, but this subscription has a quota limit of **0** for
+every gpt-5.6 variant in all ten regions checked — a subscription-level gap that needs a manual
+quota request, not something a region change fixes. `gpt-5.4` is priced identically to the planned
+`gpt-5.6-terra`, so only the scorer changed, and it got 20x cheaper. Switching back is four params
+in `infra/modules/ai.bicep`; the gpt-5.6 prices are already in `core/budget.py`.
+
+Note there is **no bare `gpt-5.6`** on Azure — luna/terra/sol are real model names, not size
+codenames. And reasoning effort is **not portable between models**: `minimal` works only on the
+original GPT-5 family, `none` only on gpt-5.1 and later. The wrong value is rejected outright,
+which is why it lives in config beside the model id.
+
+Everything retires within ~12 months; Foundry runs OpenAI models on a 12-month GA lifecycle, so
+budget one model swap per ~9 months. Deployment names are config (`MODEL_SCORER`,
+`MODEL_SUMMARIZER`) and the JSON schemas are the stable contract across a swap.
+
+See `docs/cost.md` for measured costs from the first live run.
 
 ## Feed fetching
 
