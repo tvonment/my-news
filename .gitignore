@@ -27,6 +27,7 @@ backend/.python_packages/
 !.env.example
 
 # Xcode
+ios/build/
 ios/**/xcuserdata/
 ios/**/DerivedData/
 ios/**/*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist

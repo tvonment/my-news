@@ -238,22 +238,32 @@ def feedback(req: func.HttpRequest) -> func.HttpResponse:
 def feed(req: func.HttpRequest) -> func.HttpResponse:
     """Ranked feed for the app.
 
-    Until the scoring stage lands (M2) this returns the newest harvested items so
-    the client has something real to render.
+    Ordered by relevance, not recency — the whole point of the pipeline is that
+    what matters most rises, and the recency preference is already folded into
+    the gate score. Only items the scorer has judged are returned; anything still
+    `harvested` or `gated` is invisible until the next digest run rates it.
     """
     try:
-        limit = min(int(req.params.get("limit", "50")), 200)
+        limit = min(int(req.params.get("limit", "60")), 200)
+        min_relevance = int(req.params.get("min_relevance", "0"))
     except ValueError:
-        return _json({"error": "limit must be an integer"}, status=400)
+        return _json({"error": "limit and min_relevance must be integers"}, status=400)
 
     category = req.params.get("category")
+    since = req.params.get("since")
 
-    sql = "SELECT * FROM c WHERE c.type = 'article'"
-    parameters: list[dict[str, Any]] = []
+    sql = (
+        "SELECT * FROM c WHERE c.type = 'article' AND IS_DEFINED(c.relevance) "
+        "AND c.relevance >= @min_relevance"
+    )
+    parameters: list[dict[str, Any]] = [{"name": "@min_relevance", "value": min_relevance}]
     if category:
         sql += " AND ARRAY_CONTAINS(c.categories, @category)"
         parameters.append({"name": "@category", "value": category})
-    sql += " ORDER BY c.published_at DESC OFFSET 0 LIMIT @limit"
+    if since:
+        sql += " AND c.published_at >= @since"
+        parameters.append({"name": "@since", "value": since})
+    sql += " ORDER BY c.relevance DESC OFFSET 0 LIMIT @limit"
     parameters.append({"name": "@limit", "value": limit})
 
     try:
@@ -262,26 +272,31 @@ def feed(req: func.HttpRequest) -> func.HttpResponse:
         log.exception("Feed query failed")
         return _json({"error": str(exc)}, status=500)
 
-    return _json(
-        {
-            "count": len(items),
-            "items": [
-                {
-                    "id": item["id"],
-                    "title": item.get("title"),
-                    "source": item.get("source_name"),
-                    "url": item.get("url"),
-                    "published_at": item.get("published_at"),
-                    "lead": item.get("lead", "")[:400],
-                    "relevance": item.get("relevance"),
-                    "why": item.get("why"),
-                    "summary": item.get("summary", []),
-                    "paywalled": item.get("paywalled", False),
-                }
-                for item in items
-            ],
-        }
-    )
+    return _json({"count": len(items), "items": [_feed_item(i) for i in items]})
+
+
+def _feed_item(item: dict[str, Any]) -> dict[str, Any]:
+    """Shape one article for the client.
+
+    Deliberately omits `embedding` — 512 floats per article would dominate the
+    payload and the client has no use for it.
+    """
+    return {
+        "id": item["id"],
+        "title": item.get("title"),
+        "source": item.get("source_name"),
+        "url": item.get("url"),
+        "publishedAt": item.get("published_at"),
+        "lead": (item.get("lead") or "")[:400],
+        "relevance": item.get("relevance"),
+        "why": item.get("why"),
+        "categories": item.get("categories", []),
+        "summary": item.get("summary", []),
+        "entities": item.get("entities", []),
+        "readingMinutes": item.get("reading_minutes"),
+        "paywalled": item.get("paywalled", False),
+        "state": item.get("state"),
+    }
 
 
 # ---------------------------------------------------------------------------

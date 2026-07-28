@@ -14,8 +14,8 @@ volume, against a $99/year Apple Developer Program membership that costs more th
 | M0 — infra, health endpoint | **live** in Switzerland North |
 | M1 — harvest: fetch, dedupe, persist | **live** — 34 feeds, 1,348 articles on first run |
 | M2 — embeddings gate, scoring, summaries | **live** — first digest cost $0.09 |
-| M3 — iOS app v1 | not started |
-| M4 — feedback loop | not started |
+| M3 — iOS app v1 | **runs in the simulator** against the live backend |
+| M4 — feedback loop | **working** — votes update the centroids; weekly profile rewrite still to do |
 | M5 — in-app settings | not started |
 | M6 — digest + APNs push | not started |
 | M7 — MCP server, "dig deeper" agent | not started |
@@ -25,6 +25,7 @@ Full design and the research behind it: `~/.claude/plans/i-have-an-idea-noble-ga
 ## Layout
 
 ```
+ios/            SwiftUI app (iOS 26). Feed, detail, settings; SwiftData offline cache.
 infra/          Bicep. Cosmos (free tier), Flex Consumption, Foundry, budget alerts.
 backend/        Python Azure Functions (v2 model).
   core/         config, cosmos, foundry, budget, models, sources
@@ -53,6 +54,40 @@ cd .. && azd auth login && azd up
 # 5. Verify the one unproven assumption in the plan
 cd backend && .venv/bin/python scripts/verify_vector_search.py
 ```
+
+## Running the iOS app
+
+```sh
+cd ios
+xcodebuild -project MyNews.xcodeproj -target MyNews \
+  -sdk iphonesimulator -configuration Debug build CODE_SIGNING_ALLOWED=NO
+
+xcrun simctl boot "iPhone 17 Pro"
+xcrun simctl install booted build/Debug-iphonesimulator/MyNews.app
+
+# Debug builds accept the backend config from the launch environment, so you
+# don't have to type a function key on a simulated keyboard.
+export SIMCTL_CHILD_MYNEWS_BASE_URL="https://<your-func>.azurewebsites.net"
+export SIMCTL_CHILD_MYNEWS_FUNCTION_KEY="$(az functionapp keys list -g rg-mynews-mynews \
+  -n <your-func> --query functionKeys.default -o tsv)"
+xcrun simctl launch --terminate-running-process booted com.vonmentlen.mynews
+```
+
+On a real device, enter the URL and key in Settings instead — the environment
+seeding is `#if DEBUG` only and the key goes to the Keychain,
+`AfterFirstUnlockThisDeviceOnly`, so it never lands in a backup.
+
+**Two toolchain notes, both discovered the hard way:**
+
+- **There is no asset catalog.** Xcode 26.4.1 ships the iOS 26.4 SDK but only
+  the 26.2 simulator *runtime* is installed here, and `actool` refuses to run
+  without a runtime matching the SDK — it fails the whole build with
+  *"No simulator runtime version … available to use with iphonesimulator SDK
+  version"*. Removing the (placeholder) catalog unblocks it at the cost of the
+  default app icon. Fix properly with `xcodebuild -downloadPlatform iOS`, then
+  re-add `Assets.xcassets` and the two `ASSETCATALOG_COMPILER_*` build settings.
+- **Building to a physical iPhone needs that same download** — the iOS 26.4
+  *device* platform isn't installed either.
 
 ## Things that will cost you money if changed
 
