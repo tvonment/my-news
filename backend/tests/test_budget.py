@@ -90,18 +90,42 @@ class TestUsageArithmetic:
 
 
 class TestRealisticScenario:
-    def test_medium_volume_month_is_within_budget(self) -> None:
-        """Scenario B from the plan: 3 runs/day, 200 items scored/day.
+    """Scenario B from the plan: 3 runs/day, 200 items scored/day, ~20 summarized.
 
-        Guards the headline claim that this lands at roughly $8/month of model
-        spend, so a model or price change that breaks the budget shows up here
-        rather than on a credit card statement.
-        """
-        # Scoring on luna: ~1.09M input, ~0.33M output per month.
-        scoring = estimate_usd("gpt-5.6-luna", Usage(input_tokens=1_094_000, output_tokens=334_000))
-        # Summaries on terra: 608 articles x (1900 in / 200 out).
-        summarizing = estimate_usd("gpt-5.6-terra", Usage(input_tokens=1_155_000, output_tokens=122_000))
-        embeddings = estimate_usd("text-embedding-3-small", Usage(input_tokens=1_220_000))
+    These guard the headline cost claim, so a model or price change that breaks
+    the budget shows up here rather than on a credit card statement.
+    """
 
-        total = scoring + summarizing + embeddings
+    # Scoring: ~1.09M input, ~0.33M output per month.
+    SCORING = Usage(input_tokens=1_094_000, output_tokens=334_000)
+    # Summaries: 608 articles x (1900 in / 200 out).
+    SUMMARIZING = Usage(input_tokens=1_155_000, output_tokens=122_000)
+    EMBEDDING = Usage(input_tokens=1_220_000)
+
+    def test_deployed_configuration_month(self) -> None:
+        """What is actually deployed: gpt-5-nano scoring, gpt-5.4 summarizing."""
+        total = (
+            estimate_usd("gpt-5-nano", self.SCORING)
+            + estimate_usd("gpt-5.4", self.SUMMARIZING)
+            + estimate_usd("text-embedding-3-small", self.EMBEDDING)
+        )
+        assert 4.0 < total < 6.0, f"expected ~$5/month, got ${total:.2f}"
+
+    def test_originally_planned_gpt_5_6_month(self) -> None:
+        """The gpt-5.6 tier, for when quota is granted and we switch back."""
+        total = (
+            estimate_usd("gpt-5.6-luna", self.SCORING)
+            + estimate_usd("gpt-5.6-terra", self.SUMMARIZING)
+            + estimate_usd("text-embedding-3-small", self.EMBEDDING)
+        )
         assert 6.0 < total < 10.0, f"expected ~$8/month, got ${total:.2f}"
+
+    def test_scoring_is_the_cheap_leg_in_both_configurations(self) -> None:
+        """The two-tier split only makes sense if bulk scoring stays cheap.
+
+        Scoring runs on everything that clears the gate; summarizing runs on the
+        ~10% above threshold. If scoring ever costs more than summarizing, the
+        model assignment has been swapped by mistake.
+        """
+        for scorer, summarizer in (("gpt-5-nano", "gpt-5.4"), ("gpt-5.6-luna", "gpt-5.6-terra")):
+            assert estimate_usd(scorer, self.SCORING) < estimate_usd(summarizer, self.SUMMARIZING)

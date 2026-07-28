@@ -20,15 +20,16 @@ targetScope = 'subscription'
 @description('Name of the azd environment; used to derive resource names.')
 param environmentName string
 
-@description('Primary location for all resources. West Europe keeps latency low and data in the EU.')
+@description('Primary location for all resources. Switzerland North keeps latency low and data in Switzerland, and supports Flex Consumption, Cosmos and Log Analytics.')
 @allowed([
+  'switzerlandnorth'
   'westeurope'
   'swedencentral'
   'northeurope'
   'eastus'
   'eastus2'
 ])
-param location string = 'westeurope'
+param location string = 'switzerlandnorth'
 
 @description('Email address that receives budget alerts.')
 param alertEmail string
@@ -99,6 +100,9 @@ module functions './modules/functions.bicep' = {
     scorerDeployment: ai.outputs.scorerDeployment
     summarizerDeployment: ai.outputs.summarizerDeployment
     embeddingDeployment: ai.outputs.embeddingDeployment
+    scorerModelId: ai.outputs.scorerModelId
+    summarizerModelId: ai.outputs.summarizerModelId
+    embeddingModelId: ai.outputs.embeddingModelId
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     developerPrincipalId: principalId
   }
@@ -125,3 +129,6 @@ output FOUNDRY_ENDPOINT string = ai.outputs.foundryEndpoint
 output MODEL_SCORER string = ai.outputs.scorerDeployment
 output MODEL_SUMMARIZER string = ai.outputs.summarizerDeployment
 output MODEL_EMBEDDING string = ai.outputs.embeddingDeployment
+output MODEL_SCORER_ID string = ai.outputs.scorerModelId
+output MODEL_SUMMARIZER_ID string = ai.outputs.summarizerModelId
+output MODEL_EMBEDDING_ID string = ai.outputs.embeddingModelId

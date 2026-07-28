@@ -12,18 +12,33 @@ param resourceToken string
 //   * Foundry Agent Service "Standard setup" -> mandates BYO Azure AI Search
 //     (Basic = $73.73/month)
 //
-// Model names are exact: there is NO bare `gpt-5.6` on Azure. luna/terra/sol are
-// real deployable model names, not size codenames. All three are GA, version
-// 2026-07-09, and retire 2027-07-09.
+// MODEL CHOICE — the plan called for gpt-5.6-luna/terra, but this subscription
+// has a quota LIMIT OF 0 for every gpt-5.6 variant in all ten regions checked
+// (westeurope, swedencentral, northeurope, francecentral, germanywestcentral,
+// switzerlandnorth, eastus, eastus2, westus3, japaneast). That is a
+// subscription-level gap, not a regional one, and needs a manual quota request.
+//
+// So the two-tier design maps onto models that DO have quota here:
+//   scorer     gpt-5-nano  $0.05/$0.40  <- was gpt-5.6-luna  ($1.00/$6.00)
+//   summarizer gpt-5.4     $2.50/$15.00 <- was gpt-5.6-terra ($2.50/$15.00)
+// The summarizer tier is unchanged in price; the scorer got 20x cheaper.
+//
+// To switch back once gpt-5.6 quota is granted, change the four params below to
+// 'gpt-5.6-luna' / 'gpt-5.6-terra' with version '2026-07-09', update PRICES and
+// the reasoning-effort settings in the backend, and redeploy.
 // ---------------------------------------------------------------------------
 
-@description('Bulk scorer. luna is the cheapest 5.6 tier: $1.00/1M input, $6.00/1M output (West Europe, Global Standard).')
-param scorerModelName string = 'gpt-5.6-luna'
+@description('Bulk scorer, run on every item that clears the embedding gate. gpt-5-nano is the cheapest model in the catalog at $0.05/1M input, $0.40/1M output, and this subscription has 47,900 units of free quota for it.')
+param scorerModelName string = 'gpt-5-nano'
 
-@description('Summarizer. terra costs $2.50/$15.00 per 1M but only runs on the ~10% of items that clear the relevance threshold.')
-param summarizerModelName string = 'gpt-5.6-terra'
+@description('Version for the scorer. gpt-5-nano retires 2027-02-06. This subscription already has a gpt-5-nano deployment, so it keeps "existing customer" rights past the 2026-08-07 no-new-customers date.')
+param scorerModelVersion string = '2025-08-07'
 
-param modelVersion string = '2026-07-09'
+@description('Summarizer, run only on items above the relevance threshold. Same $2.50/$15.00 per 1M as the originally planned gpt-5.6-terra.')
+param summarizerModelName string = 'gpt-5.4'
+
+@description('Version for the summarizer. gpt-5.4 retires 2027-03-05.')
+param summarizerModelVersion string = '2026-03-05'
 
 @description('Embeddings. No retirement scheduled before 2027-04-15 — the most stable model in the catalog.')
 param embeddingModelName string = 'text-embedding-3-small'
@@ -70,7 +85,7 @@ resource scorer 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = 
     model: {
       format: 'OpenAI'
       name: scorerModelName
-      version: modelVersion
+      version: scorerModelVersion
     }
     versionUpgradeOption: 'NoAutoUpgrade'
   }
@@ -87,7 +102,7 @@ resource summarizer 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01
     model: {
       format: 'OpenAI'
       name: summarizerModelName
-      version: modelVersion
+      version: summarizerModelVersion
     }
     versionUpgradeOption: 'NoAutoUpgrade'
   }
@@ -122,6 +137,11 @@ output foundryAccountName string = foundry.name
 // which is NOT one of them — so construct the openai form from the custom subdomain.
 output foundryEndpoint string = 'https://${foundryName}.openai.azure.com'
 output foundryAccountEndpoint string = foundry.properties.endpoint
+// Underlying model ids, so the backend can price token usage correctly — the
+// deployment names ('scorer'/'summarizer') carry no pricing information.
+output scorerModelId string = scorerModelName
+output summarizerModelId string = summarizerModelName
+output embeddingModelId string = embeddingModelName
 output scorerDeployment string = scorer.name
 output summarizerDeployment string = summarizer.name
 output embeddingDeployment string = embedding.name

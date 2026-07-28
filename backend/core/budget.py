@@ -42,11 +42,23 @@ class ModelPrice:
 
 
 PRICES: dict[str, ModelPrice] = {
+    # In use. Verified against the Retail Prices API for switzerlandnorth on
+    # 2026-07-28. Global Standard meters are region-independent.
+    "gpt-5-nano": ModelPrice(0.05, 0.005, 0.0, 0.40),
+    "gpt-5.4": ModelPrice(2.50, 0.25, 0.0, 15.00, 5.00, 0.50, 0.0, 22.50),
+    "text-embedding-3-small": ModelPrice(0.02, 0.02, 0.0, 0.0),
+    # Available alternatives.
+    "gpt-5.4-nano": ModelPrice(0.20, 0.02, 0.0, 1.25),
+    "gpt-5.4-mini": ModelPrice(0.75, 0.075, 0.0, 4.50),
+    "gpt-5-mini": ModelPrice(0.25, 0.025, 0.0, 2.00),
+    "text-embedding-3-large": ModelPrice(0.13, 0.13, 0.0, 0.0),
+    # The originally planned tier, kept so switching back is only a config
+    # change once gpt-5.6 quota is granted on the subscription. Note gpt-5.6 is
+    # the first family to bill cache WRITES — the pre-5.6 models above have a
+    # cache_write of 0 because no such meter exists for them.
     "gpt-5.6-luna": ModelPrice(1.00, 0.10, 1.25, 6.00, 2.00, 0.20, 2.50, 9.00),
     "gpt-5.6-terra": ModelPrice(2.50, 0.25, 3.125, 15.00, 5.00, 0.50, 6.25, 22.50),
     "gpt-5.6-sol": ModelPrice(5.00, 0.50, 6.25, 30.00, 10.00, 1.00, 12.50, 45.00),
-    "text-embedding-3-small": ModelPrice(0.02, 0.02, 0.0, 0.0),
-    "text-embedding-3-large": ModelPrice(0.13, 0.13, 0.0, 0.0),
 }
 
 LONG_CONTEXT_THRESHOLD = 272_000

@@ -12,6 +12,9 @@ param foundryEndpoint string
 param scorerDeployment string
 param summarizerDeployment string
 param embeddingDeployment string
+param scorerModelId string
+param summarizerModelId string
+param embeddingModelId string
 param appInsightsConnectionString string
 
 @description('Developer object ID, granted Cosmos data-plane read/write so you can inspect data locally. Empty skips the assignment.')
@@ -133,6 +136,31 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'MODEL_EMBEDDING'
           value: embeddingDeployment
+        }
+        // Underlying model ids drive token pricing; the deployment names above
+        // are just labels and carry no cost information.
+        {
+          name: 'MODEL_SCORER_ID'
+          value: scorerModelId
+        }
+        {
+          name: 'MODEL_SUMMARIZER_ID'
+          value: summarizerModelId
+        }
+        {
+          name: 'MODEL_EMBEDDING_ID'
+          value: embeddingModelId
+        }
+        // Reasoning effort is per-model, not global: 'minimal' works only on the
+        // original GPT-5 family (gpt-5-nano), while 'none' requires gpt-5.1 or
+        // later (gpt-5.4). Sending the wrong one is rejected by the API.
+        {
+          name: 'REASONING_EFFORT_SCORER'
+          value: 'minimal'
+        }
+        {
+          name: 'REASONING_EFFORT_SUMMARIZER'
+          value: 'none'
         }
         {
           name: 'HARVEST_SCHEDULE'

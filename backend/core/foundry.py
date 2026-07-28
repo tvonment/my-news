@@ -92,14 +92,19 @@ def structured_call(
     schema_name: str,
     schema: dict[str, Any],
     max_output_tokens: int = 4096,
-    reasoning_effort: str = "none",
+    reasoning_effort: str = "minimal",
 ) -> tuple[dict[str, Any], Usage]:
     """One strict-JSON-schema call, returning the parsed object and its usage.
 
-    ``reasoning_effort='none'`` is the default on purpose. Every gpt-5.x model is
-    a reasoning model and reasoning tokens bill at the output rate; on a
-    55-token answer, leaving the default in place can multiply the output leg
-    several-fold for no benefit on a classification task.
+    Suppressing reasoning matters more than any other single setting here. Every
+    gpt-5.x model is a reasoning model and reasoning tokens bill at the *output*
+    rate; on a 55-token answer, leaving the model's default in place can multiply
+    the output leg several-fold for no benefit on a classification task.
+
+    The value is not portable across models: ``'minimal'`` is accepted only by
+    the original GPT-5 family (gpt-5-nano), ``'none'`` only by gpt-5.1 and later
+    (gpt-5.4, gpt-5.6). Callers pass the one matching their deployment, which is
+    why it lives in config next to the model id.
 
     The system prompt goes first and unchanged so it can act as a cacheable
     prefix — everything volatile belongs in ``user_content``.

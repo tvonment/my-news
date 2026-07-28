@@ -49,9 +49,21 @@ class Settings:
     cosmos_container: str
 
     foundry_endpoint: str
+    # Deployment names — what the API is called with.
     model_scorer: str
     model_summarizer: str
     model_embedding: str
+    # Underlying model ids — what token usage is priced against. A deployment
+    # name is just a label and carries no cost information.
+    model_scorer_id: str
+    model_summarizer_id: str
+    model_embedding_id: str
+    # Reasoning effort is per-model: 'minimal' is accepted only by the original
+    # GPT-5 family (gpt-5-nano), 'none' only by gpt-5.1 and later (gpt-5.4).
+    # Sending the wrong value is rejected by the API, so these are not
+    # interchangeable and must travel with the model choice.
+    reasoning_effort_scorer: str
+    reasoning_effort_summarizer: str
 
     # 512 dims via the `dimensions` parameter (Matryoshka truncation). This MUST
     # match the container's vectorEmbeddingPolicy — a vector policy cannot be
@@ -97,6 +109,11 @@ def get_settings() -> Settings:
         model_scorer=_env("MODEL_SCORER", "scorer"),
         model_summarizer=_env("MODEL_SUMMARIZER", "summarizer"),
         model_embedding=_env("MODEL_EMBEDDING", "embedding"),
+        model_scorer_id=_env("MODEL_SCORER_ID", "gpt-5-nano"),
+        model_summarizer_id=_env("MODEL_SUMMARIZER_ID", "gpt-5.4"),
+        model_embedding_id=_env("MODEL_EMBEDDING_ID", "text-embedding-3-small"),
+        reasoning_effort_scorer=_env("REASONING_EFFORT_SCORER", "minimal"),
+        reasoning_effort_summarizer=_env("REASONING_EFFORT_SUMMARIZER", "none"),
         embedding_dimensions=_int_env("EMBEDDING_DIMENSIONS", 512),
         daily_budget_usd=_float_env("DAILY_TOKEN_BUDGET_USD", 1.50),
         summarize_threshold=_int_env("SUMMARIZE_THRESHOLD", 65),
