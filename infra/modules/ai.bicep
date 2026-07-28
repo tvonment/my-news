@@ -52,6 +52,16 @@ param embeddingCapacity int = 50
 
 var foundryName = 'aif-mynews-${resourceToken}'
 
+// This is a Microsoft Foundry resource, not a plain "AI Services" account. The
+// difference is `allowProjectManagement: true` plus at least one child project:
+// that combination is what the current Foundry portal (ai.azure.com) recognizes
+// and what unlocks the project-scoped surface (agents, evaluations, the tool
+// catalog). Without it you get a Cognitive Services multi-service account that
+// serves inference perfectly well but does not appear as a Foundry resource.
+//
+// The hub-based model (Microsoft.MachineLearningServices workspaces plus
+// separately wired Key Vault, Storage and AI Search connections) is the older
+// approach and is not used here — projects are now native child resources.
 resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   name: foundryName
   location: location
@@ -64,11 +74,30 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     type: 'SystemAssigned'
   }
   properties: {
+    allowProjectManagement: true
     customSubDomainName: foundryName
     publicNetworkAccess: 'Enabled'
     // Key-based auth off: the Function reaches Foundry with its managed identity
-    // via the Cognitive Services OpenAI User role.
+    // via the Cognitive Services OpenAI User role. The Microsoft sample leaves
+    // this false; there is no key to protect here, so it stays true.
     disableLocalAuth: true
+  }
+}
+
+// Model deployments live on the ACCOUNT, not the project, so inference and the
+// v1 API endpoint are unaffected by this. The project exists so the resource is
+// a first-class Foundry resource and so agent/eval work later has a home.
+resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
+  parent: foundry
+  name: '${foundryName}-proj'
+  location: location
+  tags: tags
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    displayName: 'MyNews'
+    description: 'Personal AI news aggregator: scoring, summarization and embeddings.'
   }
 }
 
@@ -132,6 +161,7 @@ resource embedding 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01'
 }
 
 output foundryAccountName string = foundry.name
+output foundryProjectName string = project.name
 // The v1 API's base_url accepts the `*.openai.azure.com` and `*.services.ai.azure.com`
 // forms. An AIServices account's properties.endpoint is `*.cognitiveservices.azure.com`,
 // which is NOT one of them — so construct the openai form from the custom subdomain.
