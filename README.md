@@ -14,8 +14,8 @@ volume, against a $99/year Apple Developer Program membership that costs more th
 | M0 — infra, health endpoint | **live** in Switzerland North |
 | M1 — harvest: fetch, dedupe, persist | **live** — 34 feeds, 1,348 articles on first run |
 | M2 — embeddings gate, scoring, summaries | **live** — first digest cost $0.09 |
-| M3 — iOS app v1 | **runs in the simulator** against the live backend |
-| M4 — feedback loop | **working** — votes update the centroids; weekly profile rewrite still to do |
+| M3 — iOS app v1 | **live** — runs in the simulator and builds signed for device |
+| M4 — feedback loop | **done** — votes update the centroids; weekly profile rewrite ships too |
 | M5 — in-app settings | not started |
 | M6 — digest + APNs push | not started |
 | M7 — MCP server, "dig deeper" agent | not started |
@@ -30,7 +30,7 @@ infra/          Bicep. Cosmos (free tier), Flex Consumption, Foundry, budget ale
 backend/        Python Azure Functions (v2 model).
   core/         config, cosmos, foundry, budget, models, sources
   fetch/        HTTP with conditional GET; parsing and canonicalization
-  pipeline/     harvest (M1); gate/score/summarize/digest to come
+  pipeline/     harvest, gate, score, summarize, digest, profile
   scripts/      probe_feeds.py, verify_vector_search.py
   tests/        pytest, no network
 ```
@@ -79,20 +79,40 @@ seeding is `#if DEBUG` only and the key goes to the Keychain,
 
 ### Running on a real iPhone
 
-The simulator needs nothing beyond the steps above. A device build additionally
-needs an Apple ID signed in to **Xcode → Settings → Accounts** — a codesigning
-identity in the keychain is not enough on its own, because Xcode needs the
-account to generate a provisioning profile. Without it:
+```sh
+cd ios
+xcodebuild -project MyNews.xcodeproj -target MyNews \
+  -sdk iphoneos -configuration Debug -allowProvisioningUpdates build
+
+xcrun devicectl list devices          # your phone must read `available`
+xcrun devicectl device install app --device <UDID> build/Debug-iphoneos/MyNews.app
+```
+
+`-allowProvisioningUpdates` registers the App ID and creates the provisioning
+profile on first run. The phone has to be connected and unlocked — it reads
+`unavailable` otherwise, and the install fails with a `CoreDeviceError 1011`
+naming an ECID rather than saying "not connected".
+
+**`DEVELOPMENT_TEAM` is the certificate's OU, not the value in the identity
+name.** `security find-identity` prints `Apple Development: Name (V78H5XSXCS)`,
+but that parenthesised string is the *certificate* ID. Using it produces two
+errors that both point at your Apple account rather than at the project, which
+sends you looking in the wrong place:
 
 ```
-error: No Account for Team "…". Add a new account in Accounts settings…
+error: No Account for Team "V78H5XSXCS". Add a new account in Accounts settings…
 error: No profiles for 'com.vonmentlen.mynews' were found
 ```
 
-Sign in, then `xcodebuild … -sdk iphoneos -allowProvisioningUpdates build`
-registers the App ID and creates the profile automatically. The phone must also
-be connected and unlocked — `xcrun devicectl list devices` shows `unavailable`
-until it is.
+Read the real Team ID off the certificate instead:
+
+```sh
+security find-certificate -c "Apple Development: <Your Name>" -p \
+  | openssl x509 -noout -subject
+# subject= UID=…, CN=Apple Development: … (V78H5XSXCS), OU=99J753GKC3, …
+#                                                        ^^^^^^^^^^ Team ID
+```
+
 
 ### The simulator-runtime trap
 
@@ -120,7 +140,7 @@ These are load-bearing. Each one is the difference between ~$8/month and a lot m
 | No `alwaysReady` | `infra/modules/functions.bicep` | Always-ready instances have **no free grant**: $5.26/month at 512 MB. |
 | `instanceMemoryMB: 512` | `infra/modules/functions.bicep` | Flex bills provisioned memory for the whole execution *including* time blocked on LLM calls. This pipeline is ~95% network wait, so 2048 MB would cost 4x for identical wall-clock. |
 | `sku.name: 'GlobalStandard'` | `infra/modules/ai.bicep` | `ProvisionedManaged` is ~$1,460/month per PTU with a ~15 PTU minimum. |
-| `reasoning_effort: "none"` | `core/foundry.py` | gpt-5.6 is a reasoning model and reasoning tokens bill at the **output** rate ($6/1M on luna). Leaving the default on a 55-token answer multiplies the output bill several-fold. |
+| `REASONING_EFFORT_*` | app settings | Every gpt-5.x model is a reasoning model and reasoning tokens bill at the **output** rate. Leaving the model default on a 55-token answer multiplies the output bill several-fold. The value is not portable: `minimal` for gpt-5-nano, `none` for gpt-5.4. |
 
 Azure OpenAI has **no hard spend limit**. The brakes are the budget alert in Bicep and
 `DAILY_TOKEN_BUDGET_USD` in `core/budget.py`.
