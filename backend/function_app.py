@@ -329,9 +329,13 @@ def feed(req: func.HttpRequest) -> func.HttpResponse:
     category = req.params.get("category")
     since = req.params.get("since")
 
+    # Collapsed cluster members are excluded: only the primary of each story is
+    # shown. They keep their own record and stay searchable — they just don't
+    # occupy a card repeating what the primary already says.
     sql = (
         "SELECT * FROM c WHERE c.type = 'article' AND IS_DEFINED(c.relevance) "
-        "AND c.relevance >= @min_relevance"
+        "AND c.relevance >= @min_relevance "
+        "AND (NOT IS_DEFINED(c.cluster_id) OR IS_NULL(c.cluster_id) OR c.cluster_id = c.id)"
     )
     parameters: list[dict[str, Any]] = [{"name": "@min_relevance", "value": min_relevance}]
     if category:
@@ -372,8 +376,40 @@ def _feed_item(item: dict[str, Any]) -> dict[str, Any]:
         "entities": item.get("entities", []),
         "readingMinutes": item.get("reading_minutes"),
         "paywalled": item.get("paywalled", False),
+        "satire": item.get("satire", False),
+        "alsoReportedBy": item.get("also_reported_by", []),
+        "clusterSize": item.get("cluster_size", 1),
         "state": item.get("state"),
     }
+
+
+@app.route(route="categories", methods=["GET"], auth_level=func.AuthLevel.FUNCTION)
+def categories(req: func.HttpRequest) -> func.HttpResponse:
+    """The fixed taxonomy plus how many unread-ish items sit in each bucket.
+
+    Served from the backend rather than hardcoded in the app so the two can
+    never disagree about what the categories are.
+    """
+    from core.taxonomy import CATEGORIES, CATEGORY_LABELS
+
+    rows = cosmos.query(
+        "SELECT c.categories FROM c WHERE c.type = 'article' AND IS_DEFINED(c.relevance) "
+        "AND (NOT IS_DEFINED(c.cluster_id) OR IS_NULL(c.cluster_id) OR c.cluster_id = c.id)"
+    )
+    counts: dict[str, int] = {name: 0 for name in CATEGORIES}
+    for row in rows:
+        for name in row.get("categories") or []:
+            if name in counts:
+                counts[name] += 1
+
+    return _json(
+        {
+            "categories": [
+                {"id": name, "label": CATEGORY_LABELS[name], "count": counts[name]}
+                for name in CATEGORIES
+            ]
+        }
+    )
 
 
 # ---------------------------------------------------------------------------

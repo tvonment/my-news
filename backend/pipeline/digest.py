@@ -13,7 +13,7 @@ import logging
 from core import cosmos
 from core.budget import DailyBudget
 from core.models import RunRecord, iso, utcnow
-from pipeline import gate, score, summarize
+from pipeline import cluster, gate, score, summarize
 
 log = logging.getLogger(__name__)
 
@@ -38,8 +38,15 @@ def run_digest() -> RunRecord:
             record.items_scored = score_result.scored
             record.budget_exhausted |= score_result.budget_exhausted
 
+            # Cluster before summarizing, not after: the whole point is to spend
+            # one summarizer call per story instead of one per article.
             scored = [a for a in admitted if a.get("state") == "scored"]
-            summary_result = summarize.summarize_articles(scored, budget=budget)
+            clusters = cluster.cluster_articles(scored)
+            for group in clusters:
+                cluster.apply_cluster_metadata(group)
+            record.clusters_formed = sum(1 for c in clusters if c.size > 1)
+
+            summary_result = summarize.summarize_clusters(clusters, budget=budget)
             record.items_summarized = summary_result.summarized
             record.budget_exhausted |= summary_result.budget_exhausted
 

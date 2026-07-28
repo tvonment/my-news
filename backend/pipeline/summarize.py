@@ -28,6 +28,7 @@ from core import cosmos, foundry
 from core.budget import BudgetExhausted, DailyBudget, Usage
 from core.config import get_settings
 from fetch.http import DEFAULT_TIMEOUT, user_agent_for
+from pipeline.cluster import Cluster
 
 log = logging.getLogger(__name__)
 
@@ -65,17 +66,32 @@ SUMMARY_SCHEMA: dict[str, Any] = {
 }
 
 SUMMARY_PROMPT = """\
-Summarize one news article for a reader who wants the substance fast.
+Summarize one news story for a reader who wants the substance fast.
 
-Return exactly three bullets in ENGLISH, regardless of the article's language.
-Each bullet is one sentence and states a fact from the article: what happened,
+Return exactly three bullets in ENGLISH, regardless of the source language.
+Each bullet is one sentence and states a fact from the text: what happened,
 what it means, and what is concretely new or changed. Do not editorialize, do
 not repeat the headline, and do not pad. If the text is too thin to support
 three distinct bullets, say so plainly in the bullets you can support.
 
+You may be given the SAME story as covered by several outlets. When you are:
+write one summary of the story, not one per outlet. Prefer facts that more than
+one outlet reports. Where they genuinely disagree on a fact, say so in the
+bullet rather than silently picking one — a contradiction between outlets is
+itself information the reader wants.
+
+If the input is marked SATIRE, it is deliberately fake. Summarize it as a joke
+and make that unmistakable in the first bullet. Never describe a satirical
+claim as something that happened.
+
 Also return the key named entities (people, companies, products) and an integer
 estimate of reading time in minutes for the original article.
 """
+
+# Beyond three versions the marginal fact rate collapses while the token cost
+# keeps rising — outlets four and five are almost always rewriting the same wire
+# copy the first three already carried.
+MAX_SOURCES_PER_SUMMARY = 3
 
 
 @dataclass
@@ -83,6 +99,8 @@ class SummarizeResult:
     summarized: int = 0
     paywalled: int = 0
     failed: int = 0
+    # Extra outlets folded into a summary rather than shown as their own card.
+    clustered_sources: int = 0
     usage: Usage = None  # type: ignore[assignment]
     cost_usd: float = 0.0
     budget_exhausted: bool = False
@@ -117,20 +135,58 @@ def extract_article(url: str, client: httpx.Client) -> str | None:
     return text[:MAX_EXTRACT_CHARS] if text else None
 
 
-def summarize_articles(
-    articles: list[dict[str, Any]],
+def _build_input(cluster: Cluster, client: httpx.Client) -> tuple[str, bool]:
+    """Assemble the text for one story, drawing on up to three outlets.
+
+    Returns the prompt body and whether every version we could reach was
+    paywalled — in which case there is nothing to synthesize from beyond teasers.
+    """
+    parts: list[str] = []
+    all_paywalled = True
+
+    for article in cluster.all_articles()[:MAX_SOURCES_PER_SUMMARY]:
+        title = article.get("title", "")
+        source = article.get("source_name", "")
+        body = extract_article(article.get("url", ""), client) or ""
+
+        if looks_paywalled(title, body):
+            article["paywalled"] = True
+            body = article.get("lead", "") or ""
+        else:
+            all_paywalled = False
+
+        if body:
+            parts.append(f"--- {source}: {title} ---\n{body}")
+
+    marker = "SATIRE — this is deliberately fake\n\n" if cluster.primary.get("satire") else ""
+    return marker + "\n\n".join(parts), all_paywalled
+
+
+def summarize_clusters(
+    clusters: list[Cluster],
     budget: DailyBudget | None = None,
 ) -> SummarizeResult:
+    """Summarize one story per cluster rather than one per article.
+
+    This is why clustering pays for itself: five outlets covering an
+    announcement previously cost five summarizer calls and produced five nearly
+    identical cards. Now it is one call and one card, so the expensive model
+    runs less often even though it reads more text.
+    """
     settings = get_settings()
     budget = budget or DailyBudget()
     result = SummarizeResult()
 
-    candidates = [a for a in articles if (a.get("relevance") or 0) >= settings.summarize_threshold]
+    candidates = [
+        c
+        for c in clusters
+        if (c.primary.get("relevance") or 0) >= settings.summarize_threshold
+    ]
     if not candidates:
         return result
 
     with httpx.Client(follow_redirects=True, timeout=DEFAULT_TIMEOUT, http2=True) as client:
-        for article in candidates:
+        for cluster in candidates:
             try:
                 budget.check()
             except BudgetExhausted as exc:
@@ -138,51 +194,62 @@ def summarize_articles(
                 result.budget_exhausted = True
                 break
 
-            title = article.get("title", "")
-            body = extract_article(article.get("url", ""), client) or ""
+            primary = cluster.primary
+            body, all_paywalled = _build_input(cluster, client)
 
-            if looks_paywalled(title, body):
-                # Keep the teaser, flag it, move on. The app still links out.
-                article["paywalled"] = True
-                article["state"] = "summarized"
-                body = article.get("lead", "")
-                if len(body) < 120:
-                    cosmos.upsert(article)
-                    result.paywalled += 1
-                    continue
+            if all_paywalled:
                 result.paywalled += 1
+            if len(body) < 120:
+                # Nothing worth spending a summarizer call on.
+                primary["state"] = "summarized"
+                _persist(cluster)
+                continue
 
             try:
                 parsed, usage = foundry.structured_call(
                     deployment=settings.model_summarizer,
                     system_prompt=SUMMARY_PROMPT,
-                    user_content=f"Title: {title}\nSource: {article.get('source_name', '')}\n\n{body}",
+                    user_content=body,
                     schema_name="article_summary",
                     schema=SUMMARY_SCHEMA,
                     max_output_tokens=800,
                     reasoning_effort=settings.reasoning_effort_summarizer,
                 )
             except Exception:
-                log.exception("Summarization failed for %s", article.get("id"))
+                log.exception("Summarization failed for cluster %s", primary.get("id"))
                 result.failed += 1
                 continue
 
             result.usage = result.usage + usage
             result.cost_usd += budget.charge(settings.model_summarizer_id, usage)
 
-            article["summary"] = [str(b) for b in parsed.get("summary", [])][:3]
-            article["entities"] = [str(e) for e in parsed.get("entities", [])][:12]
-            article["reading_minutes"] = int(parsed.get("reading_minutes", 0) or 0)
-            article["state"] = "summarized"
-            cosmos.upsert(article)
+            primary["summary"] = [str(b) for b in parsed.get("summary", [])][:3]
+            primary["entities"] = [str(e) for e in parsed.get("entities", [])][:12]
+            primary["reading_minutes"] = int(parsed.get("reading_minutes", 0) or 0)
+            primary["state"] = "summarized"
+            _persist(cluster)
             result.summarized += 1
+            result.clustered_sources += len(cluster.other_sources)
 
     budget.flush()
     log.info(
-        "Summarized %d (%d paywalled, %d failed) for $%.4f",
+        "Summarized %d stories from %d extra sources (%d paywalled, %d failed) for $%.4f",
         result.summarized,
+        result.clustered_sources,
         result.paywalled,
         result.failed,
         result.cost_usd,
     )
     return result
+
+
+def _persist(cluster: Cluster) -> None:
+    """Save the primary plus every collapsed member.
+
+    Members are marked summarized so a later run does not pay to summarize them
+    individually, but they keep their own record and stay searchable.
+    """
+    cosmos.upsert(cluster.primary)
+    for member in cluster.members:
+        member["state"] = "summarized"
+        cosmos.upsert(member)

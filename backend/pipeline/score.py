@@ -20,6 +20,7 @@ from core import cosmos, foundry
 from core.budget import BudgetExhausted, DailyBudget, Usage
 from core.config import get_settings
 from core.models import USER_PK
+from core.taxonomy import CATEGORIES, CATEGORY_GUIDE, SATIRE_CATEGORY
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +37,13 @@ SCORE_SCHEMA: dict[str, Any] = {
                 "properties": {
                     "n": {"type": "integer", "description": "The article's number from the input list"},
                     "relevance": {"type": "integer", "description": "0-100, how much Thomas wants to read this"},
-                    "categories": {"type": "array", "items": {"type": "string"}},
+                    "categories": {
+                        "type": "array",
+                        # A closed vocabulary, enforced by the schema rather than
+                        # by the prompt. Free text produced 213 distinct tags and
+                        # made grouping impossible.
+                        "items": {"type": "string", "enum": list(CATEGORIES)},
+                    },
                     "why": {"type": "string", "description": "At most 15 words, in English"},
                 },
                 # Strict mode requires every property listed in `required` and
@@ -64,10 +71,15 @@ opinion pieces without new facts, listicles, thin aggregator rewrites of a story
 he can read at the source, and celebrity or lifestyle coverage.
 """
 
-RUBRIC = """\
+RUBRIC = f"""\
 You rank news articles for one person. For each numbered article, return a
-relevance score from 0 to 100, one or more short lowercase category tags, and a
-`why` of at most 15 words in English explaining the score.
+relevance score from 0 to 100, one or two categories from the fixed list below,
+and a `why` of at most 15 words in English explaining the score.
+
+Categories — use only these:
+{CATEGORY_GUIDE}
+Articles marked [SATIRE] are deliberately fake. Always categorize them as `fun`
+and never treat their claims as real events, however plausible they sound.
 
 Scoring guide:
   85-100  He will almost certainly want to read this today.
@@ -117,8 +129,24 @@ def format_batch(articles: list[dict[str, Any]]) -> str:
         title = article.get("title", "").strip()
         lead = (article.get("lead") or "").strip()[:400]
         source = article.get("source_name", "")
-        lines.append(f"{index}. [{source}] {title}\n   {lead}")
+        # Satire is marked in the input rather than left for the model to infer.
+        # Postillon headlines are written to be plausible, and a model that
+        # mistakes one for real news produces a confidently wrong summary.
+        marker = " [SATIRE]" if article.get("satire") else ""
+        lines.append(f"{index}. [{source}]{marker} {title}\n   {lead}")
     return "\n\n".join(lines)
+
+
+def clean_categories(raw: Any, satire: bool) -> list[str]:
+    """Keep only known categories; satire is always `fun` regardless of the model."""
+    if satire:
+        return [SATIRE_CATEGORY]
+    seen: list[str] = []
+    for value in raw or []:
+        name = str(value).strip().lower()
+        if name in CATEGORIES and name not in seen:
+            seen.append(name)
+    return seen[:2]
 
 
 def score_articles(articles: list[dict[str, Any]], budget: DailyBudget | None = None) -> ScoreResult:
@@ -161,7 +189,9 @@ def score_articles(articles: list[dict[str, Any]], budget: DailyBudget | None = 
                 log.warning("Scorer omitted article %d (%s)", index, article.get("id"))
                 continue
             article["relevance"] = max(0, min(100, int(verdict.get("relevance", 0))))
-            article["categories"] = [str(c).lower() for c in verdict.get("categories", [])][:5]
+            article["categories"] = clean_categories(
+                verdict.get("categories"), bool(article.get("satire"))
+            )
             article["why"] = str(verdict.get("why", ""))[:200]
             article["state"] = "scored"
             cosmos.upsert(article)

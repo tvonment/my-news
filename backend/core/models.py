@@ -74,6 +74,13 @@ class Article:
     entities: list[str] = field(default_factory=list)
     reading_minutes: int | None = None
     paywalled: bool = False
+    # Carried from the source. Satire has to travel with the article all the way
+    # to the summarizer and the UI, because a summary strips the tonal cues that
+    # tell a reader it is a joke.
+    satire: bool = False
+    # True when the lead was backfilled from the article page because the feed's
+    # own teaser was too thin to rank on.
+    lead_enriched: bool = False
 
     # Set by the cluster stage. `cluster_id` is the id of the primary article.
     cluster_id: str | None = None
@@ -91,6 +98,12 @@ class Article:
             doc.pop("ttl", None)
         if doc.get("embedding") is None:
             doc.pop("embedding", None)
+        # `IS_DEFINED()` is TRUE for an explicit null in Cosmos, so writing
+        # `cluster_id: null` makes `NOT IS_DEFINED(c.cluster_id)` false and any
+        # query using it silently drops every unclustered article. Omit the key
+        # instead of storing a null.
+        if doc.get("cluster_id") is None:
+            doc.pop("cluster_id", None)
         return doc
 
 
@@ -151,7 +164,10 @@ class RunRecord:
     feeds_failed: int = 0
     items_seen: int = 0
     items_new: int = 0
+    items_enriched: int = 0
+    items_too_old: int = 0
     items_gated: int = 0
+    clusters_formed: int = 0
     items_scored: int = 0
     items_summarized: int = 0
 

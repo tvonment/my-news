@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import httpx
+import trafilatura
 
 from core import cosmos
 from core.config import get_settings
@@ -27,10 +28,20 @@ from core.models import (
     utcnow,
 )
 from core.sources import Source, load_sources
-from fetch.http import DEFAULT_TIMEOUT, fetch_feed
+from fetch.http import DEFAULT_TIMEOUT, fetch_feed, user_agent_for
 from fetch.parse import NotAFeedError, parse_feed
 
 log = logging.getLogger(__name__)
+
+
+# A feed teaser shorter than this carries too little signal to embed against —
+# the gate ends up ranking on the title alone, which systematically favours
+# verbose rumor blogs over terse first-party announcements.
+MIN_LEAD_CHARS = 200
+ENRICHED_LEAD_CHARS = 700
+# Bounded per run so a first harvest of a 1,000-item backlog cannot turn into a
+# thousand outbound page fetches.
+MAX_ENRICHMENTS_PER_RUN = 40
 
 
 @dataclass
@@ -40,6 +51,8 @@ class HarvestOutcome:
     failed: int = 0
     items_seen: int = 0
     items_new: int = 0
+    items_too_old: int = 0
+    enriched: int = 0
     stale_feeds: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -144,8 +157,16 @@ def harvest_source(
     ttl_seconds = settings.article_ttl_days * 24 * 60 * 60
     new_count = 0
 
+    max_age = timedelta(days=settings.max_article_age_days)
+
     for item in parsed.items:
         outcome.items_seen += 1
+        # Skip the archive. A feed's deep back-catalogue is indistinguishable
+        # from new content on first sight, and storing it costs RU for articles
+        # the gate would never surface anyway — it only looks at recent days.
+        if now - item.published > max_age:
+            outcome.items_too_old += 1
+            continue
         article = Article(
             id=article_id(item.canonical_url),
             pk=article_pk(item.published),
@@ -158,11 +179,20 @@ def harvest_source(
             published_at=iso(item.published),
             fetched_at=iso(now),
             ttl=ttl_seconds,
+            satire=source.satire,
         )
         # Dedupe is the 409 from create_item, not a preceding query: ~1 RU and
         # no race between the check and the write.
         if cosmos.try_create(article.to_doc()):
             new_count += 1
+            if (
+                source.enrich
+                and len(article.lead) < MIN_LEAD_CHARS
+                and outcome.enriched < MAX_ENRICHMENTS_PER_RUN
+            ):
+                if enrich_lead(article, client):
+                    outcome.enriched += 1
+                    cosmos.upsert(article.to_doc())
 
     outcome.items_new += new_count
     state.etag = result.etag
@@ -182,6 +212,40 @@ def harvest_source(
 
     cosmos.upsert(state.to_doc())
     log.info("Harvested %s: %d items, %d new", source.id, len(parsed.items), new_count)
+
+
+def enrich_lead(article: Article, client: httpx.Client) -> bool:
+    """Backfill a usable lead from the article page.
+
+    Some of the best sources have the worst teasers — Hugging Face's feed has no
+    description field at all, OpenAI's is a ~150-character stub — so they lose
+    the embedding gate to rumor blogs that write three verbose sentences. This
+    levels that up rather than penalising the verbose sources, which would just
+    trade one bias for another.
+
+    Costs one page fetch and no tokens. Failure is not an error: the article
+    keeps its thin lead and simply competes as before.
+    """
+    try:
+        response = client.get(article.url, headers={"User-Agent": user_agent_for(article.url)})
+        response.raise_for_status()
+        text = trafilatura.extract(
+            response.text, include_comments=False, include_tables=False, favor_precision=True
+        )
+    except (httpx.HTTPError, ValueError) as exc:
+        log.debug("Could not enrich %s: %s", article.url, exc)
+        return False
+
+    if not text:
+        return False
+
+    lead = " ".join(text.split())[:ENRICHED_LEAD_CHARS]
+    if len(lead) <= len(article.lead):
+        return False
+
+    article.lead = lead
+    article.lead_enriched = True
+    return True
 
 
 def run_harvest(only_source: str | None = None) -> RunRecord:
@@ -208,17 +272,20 @@ def run_harvest(only_source: str | None = None) -> RunRecord:
     record.feeds_failed = outcome.failed
     record.items_seen = outcome.items_seen
     record.items_new = outcome.items_new
+    record.items_enriched = outcome.enriched
+    record.items_too_old = outcome.items_too_old
     record.finished_at = iso(utcnow())
     record.ok = outcome.failed == 0
 
     cosmos.upsert(record.to_doc())
     log.info(
-        "Harvest complete: polled=%d unchanged=%d failed=%d seen=%d new=%d stale=%s",
+        "Harvest complete: polled=%d unchanged=%d failed=%d seen=%d new=%d too_old=%d stale=%s",
         outcome.polled,
         outcome.unchanged,
         outcome.failed,
         outcome.items_seen,
         outcome.items_new,
+        outcome.items_too_old,
         outcome.stale_feeds,
     )
     return record

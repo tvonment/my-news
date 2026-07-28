@@ -85,6 +85,11 @@ class Settings:
     exploration_quota: float
 
     article_ttl_days: int
+    # Don't ingest anything published longer ago than this. Several feeds carry
+    # a deep archive — openai.com/news ships 1,051 items spanning years, Hugging
+    # Face 831 — and without a cutoff every one is written to Cosmos on first
+    # sight, costing RU and storage for articles that can never reach the feed.
+    max_article_age_days: int
     user_agent: str
     push_enabled: bool
 
@@ -121,6 +126,7 @@ def get_settings() -> Settings:
         cluster_threshold=_float_env("CLUSTER_THRESHOLD", 0.80),
         exploration_quota=_float_env("EXPLORATION_QUOTA", 0.10),
         article_ttl_days=_int_env("ARTICLE_TTL_DAYS", 21),
+        max_article_age_days=_int_env("MAX_ARTICLE_AGE_DAYS", 7),
         user_agent=_env(
             "USER_AGENT",
             # Deliberately honest and un-AI-sounding. derStandard, Spiegel, ORF,

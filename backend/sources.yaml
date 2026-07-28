@@ -50,6 +50,7 @@ sources:
     url: https://www.microsoft.com/releasecommunications/api/v2/azure/rss
     category: microsoft
     lang: en
+    enrich: true
     stale_after_hours: 48
     # Descriptions are hard-truncated at exactly 255 chars, often mid-word, and
     # the feed sends no validator at all. Titles carry useful "[In preview]" /
@@ -85,6 +86,7 @@ sources:
     url: https://www.apple.com/newsroom/rss-feed.rss
     category: apple
     lang: en
+    enrich: true
     stale_after_hours: 168
     # Atom, despite the .rss filename and the application/rss+xml Content-Type.
   - id: apple-dev-news
@@ -106,6 +108,7 @@ sources:
     url: https://developer.apple.com/news/releases/rss/releases.rss
     category: apple
     lang: en
+    enrich: true
     stale_after_hours: 336
     # Sends an EMPTY Last-Modified header and no ETag: body-hash only.
   - id: apple-ml
@@ -139,6 +142,7 @@ sources:
     url: https://openai.com/news/rss.xml
     category: ai
     lang: en
+    enrich: true
     stale_after_hours: 168
     # 1,051 items / 638 KB per fetch and no validators — the item cap earns its
     # keep here. Consider a longer poll interval if bandwidth ever matters.
@@ -148,18 +152,21 @@ sources:
     url: https://deepmind.google/blog/rss.xml
     category: ai
     lang: en
+    enrich: true
     stale_after_hours: 336
   - id: google-ai
     name: Google AI
     url: https://blog.google/innovation-and-ai/technology/ai/rss/
     category: ai
     lang: en
+    enrich: true
     stale_after_hours: 336
   - id: huggingface
     name: Hugging Face Blog
     url: https://huggingface.co/blog/feed.xml
     category: ai
     lang: en
+    enrich: true
     stale_after_hours: 336
     # Title-only: the items carry no <description> or content:encoded at all, so
     # anything beyond the headline requires fetching the page.
@@ -203,6 +210,7 @@ sources:
     url: https://www.bloomberg.com/authors/AS7Hj1mBMGM/mark-gurman.rss
     category: apple-rumors
     lang: en
+    enrich: true
     stale_after_hours: 336
     # Descriptions are empty — titles and links only — and the articles are
     # paywalled. Kept for the signal; MacRumors/9to5Mac recap Power On anyway.
@@ -213,6 +221,7 @@ sources:
     url: https://www.heise.de/rss/heise-atom.xml
     category: tech
     lang: de
+    enrich: true
     stale_after_hours: 12
     # Paywalled items are title-prefixed "heise+ | " and get filtered downstream.
   - id: heise-developer
@@ -220,6 +229,7 @@ sources:
     url: https://www.heise.de/developer/feed.xml
     category: dev
     lang: de
+    enrich: true
     stale_after_hours: 72
   - id: arstechnica
     name: Ars Technica
@@ -240,12 +250,14 @@ sources:
     url: https://techcrunch.com/feed/
     category: tech
     lang: en
+    enrich: true
     stale_after_hours: 24
   - id: wired
     name: WIRED
     url: https://www.wired.com/feed/rss
     category: tech
     lang: en
+    enrich: true
     stale_after_hours: 48
   - id: hn
     name: Hacker News (100+ points)
@@ -267,18 +279,21 @@ sources:
     url: https://feeds.bbci.co.uk/news/world/rss.xml
     category: world
     lang: en
+    enrich: true
     stale_after_hours: 12
   - id: nyt
     name: The New York Times
     url: https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml
     category: world
     lang: en
+    enrich: true
     stale_after_hours: 12
   - id: aljazeera
     name: Al Jazeera
     url: https://www.aljazeera.com/xml/rss/all.xml
     category: world
     lang: en
+    enrich: true
     stale_after_hours: 12
   - id: npr
     name: NPR
@@ -288,6 +303,258 @@ sources:
     poll_minutes: 30
     stale_after_hours: 24
     # 10-item window.
+
+  # --- Apple, higher signal than the rumor blogs ---------------------------
+  # Added to shift Apple coverage from churn toward analysis. The existing
+  # rumor blogs stay, but these give the scorer better material to prefer.
+  - id: michael-tsai
+    name: Michael Tsai
+    url: https://mjtsai.com/blog/feed/
+    category: apple
+    lang: en
+    stale_after_hours: 96
+  - id: macstories
+    name: MacStories
+    url: https://www.macstories.net/feed/
+    category: apple
+    lang: en
+    full_text: true
+    stale_after_hours: 168
+  - id: eclectic-light
+    name: The Eclectic Light Company
+    url: https://eclecticlight.co/feed/
+    category: apple
+    lang: en
+    enrich: true
+    full_text: true
+    stale_after_hours: 96
+    # Deepest macOS/iOS internals writing anywhere.
+  - id: ming-chi-kuo
+    name: Ming-Chi Kuo
+    url: https://medium.com/feed/@mingchikuo
+    category: apple-rumors
+    lang: en
+    stale_after_hours: 720
+    # The analyst the rumor blogs quote second-hand — read him first instead.
+  - id: verge-apple
+    name: The Verge — Apple
+    url: https://www.theverge.com/rss/apple/index.xml
+    category: apple
+    lang: en
+    stale_after_hours: 48
+    # Section feed, so it does not roll over the way the 10-item main feed does.
+  - id: mac-and-i
+    name: Mac & i (heise)
+    url: https://www.heise.de/mac-and-i/feed.xml
+    category: apple
+    lang: de
+    enrich: true
+    stale_after_hours: 48
+  - id: tidbits
+    name: TidBITS
+    url: https://tidbits.com/feed/
+    category: apple
+    lang: en
+    enrich: true
+    stale_after_hours: 168
+
+  # --- Microsoft & Azure, beyond the first-party blogs ---------------------
+  - id: github-changelog
+    name: GitHub Changelog
+    url: https://github.blog/changelog/feed/
+    category: dev
+    lang: en
+    stale_after_hours: 72
+  - id: github-blog
+    name: The GitHub Blog
+    url: https://github.blog/feed/
+    category: dev
+    lang: en
+    full_text: true
+    stale_after_hours: 168
+  - id: azure-architecture
+    name: Azure Architecture Blog
+    url: https://techcommunity.microsoft.com/t5/s/gxcuf89792/rss/board?board.id=AzureArchitectureBlog
+    category: microsoft
+    lang: en
+    full_text: true
+    stale_after_hours: 336
+  - id: azure-devops-blog
+    name: Azure DevOps Blog
+    url: https://devblogs.microsoft.com/devops/feed/
+    category: dev
+    lang: en
+    full_text: true
+    stale_after_hours: 336
+  - id: visualstudio-blog
+    name: Visual Studio Blog
+    url: https://devblogs.microsoft.com/visualstudio/feed/
+    category: dev
+    lang: en
+    full_text: true
+    stale_after_hours: 336
+  - id: ms-security
+    name: Microsoft Security Blog
+    url: https://www.microsoft.com/en-us/security/blog/feed/
+    category: security
+    lang: en
+    full_text: true
+    stale_after_hours: 168
+  - id: foundry-blog
+    name: Microsoft Foundry Blog
+    url: https://devblogs.microsoft.com/foundry/feed/
+    category: ai
+    lang: en
+    full_text: true
+    stale_after_hours: 336
+    # Directly relevant: this is the platform MyNews itself runs on.
+  - id: agent-framework
+    name: Microsoft Agent Framework
+    url: https://devblogs.microsoft.com/agent-framework/feed/
+    category: ai
+    lang: en
+    full_text: true
+    stale_after_hours: 336
+  - id: entra-blog
+    name: Microsoft Entra Blog
+    url: https://techcommunity.microsoft.com/t5/s/gxcuf89792/rss/board?board.id=Identity
+    category: security
+    lang: en
+    full_text: true
+    stale_after_hours: 336
+    enabled: false
+    # DISABLED: resolves 200 but returns 0 items — the board.id is wrong.
+    # Identity content is worth having; find the correct board id and re-enable.
+  - id: azure-sdk-blog
+    name: Azure SDK Blog
+    url: https://devblogs.microsoft.com/azure-sdk/feed/
+    category: dev
+    lang: en
+    full_text: true
+    stale_after_hours: 336
+  - id: ise-blog
+    name: ISE Developer Blog
+    url: https://devblogs.microsoft.com/ise/feed/
+    category: dev
+    lang: en
+    full_text: true
+    stale_after_hours: 720
+  - id: petri
+    name: Petri IT Knowledgebase
+    url: https://petri.com/feed/
+    category: microsoft
+    lang: en
+    stale_after_hours: 72
+  - id: directions-on-microsoft
+    name: Directions on Microsoft
+    url: https://www.directionsonmicrosoft.com/feed/
+    category: microsoft
+    lang: en
+    full_text: true
+    stale_after_hours: 720
+  - id: thenewstack
+    name: The New Stack
+    url: https://thenewstack.io/feed/
+    category: dev
+    lang: en
+    full_text: true
+    stale_after_hours: 48
+
+  # --- Hardware and AI silicon ---------------------------------------------
+  - id: nvidia-blog
+    name: NVIDIA Blog
+    url: https://blogs.nvidia.com/feed/
+    category: hardware
+    lang: en
+    full_text: true
+    stale_after_hours: 96
+  - id: chipsandcheese
+    name: Chips and Cheese
+    url: https://chipsandcheese.com/feed
+    category: hardware
+    lang: en
+    enrich: true
+    full_text: true
+    stale_after_hours: 720
+  - id: morethanmoore
+    name: More Than Moore
+    url: https://morethanmoore.substack.com/feed
+    category: hardware
+    lang: en
+    enrich: true
+    full_text: true
+    stale_after_hours: 720
+  - id: raspberrypi
+    name: Raspberry Pi
+    url: https://www.raspberrypi.com/feed/
+    category: hardware
+    lang: en
+    full_text: true
+    stale_after_hours: 336
+  - id: ars-gadgets
+    name: Ars Technica — Gadgets
+    url: https://feeds.arstechnica.com/arstechnica/gadgets
+    category: hardware
+    lang: en
+    enrich: true
+    stale_after_hours: 72
+  - id: golem-mobile
+    name: Golem — Mobile Computing
+    url: https://rss.golem.de/rss.php?ms=mobil&feed=RSS2.0
+    category: hardware
+    lang: de
+    enrich: true
+    stale_after_hours: 72
+    # Section feed rather than Golem's firehose — same quality, 1/60th the volume.
+
+  # --- Fun: satire. ALWAYS labelled, never presented as fact ---------------
+  - id: postillon
+    name: Der Postillon
+    url: https://www.der-postillon.com/feeds/posts/summary?max-results=25
+    category: fun
+    lang: de
+    satire: true
+    stale_after_hours: 72
+    # NOTE: the feed advertised on the site is broken. This summary variant is
+    # the one that actually works — do not "fix" it back to the advertised URL.
+  - id: tagespresse
+    name: Die Tagespresse
+    url: https://dietagespresse.com/feed/
+    category: fun
+    lang: de
+    satire: true
+    stale_after_hours: 168
+    # Austrian satire — the closest to home of the set.
+  - id: titanic
+    name: Titanic
+    url: https://www.titanic-magazin.de/feed/
+    category: fun
+    lang: de
+    satire: true
+    enrich: true
+    stale_after_hours: 168
+  - id: theonion
+    name: The Onion
+    url: https://theonion.com/feed/
+    category: fun
+    lang: en
+    satire: true
+    stale_after_hours: 72
+  - id: mcsweeneys
+    name: McSweeney's Internet Tendency
+    url: https://www.mcsweeneys.net/rss
+    category: fun
+    lang: en
+    satire: true
+    full_text: true
+    stale_after_hours: 168
+
+# Deliberately NOT added — verified working, but high volume with thin teasers,
+# which with no per-source cap would recreate the crowding these changes fix:
+#   Neowin (~35/day, 153 char teasers) · Thurrott (~11/day, 230 char)
+#   Windows Central (~8.3/day) · ComputerBase (~15/day) · Dr. Windows (~9/day)
+#   Borns IT-Blog (~5.8/day) · The Register main feed (~12/day)
+# All are in the research if you want to trade some of the above for them.
 
 # Verified broken on 2026-07-27 — do not re-add without re-testing:
 #   https://news.microsoft.com/feed/                 HTTP 200 but frozen since 2025-05-07
