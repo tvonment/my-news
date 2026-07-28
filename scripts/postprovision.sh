@@ -39,6 +39,7 @@ cat > "$OUT" <<JSON
     "MODEL_EMBEDDING": "$MODEL_EMBEDDING",
     "HARVEST_SCHEDULE": "0 */30 * * * *",
     "DIGEST_SCHEDULE": "0 0 5,10,17 * * *",
+    "PROFILE_SCHEDULE": "0 0 3 * * 0",
     "DAILY_TOKEN_BUDGET_USD": "1.50",
     "PUSH_ENABLED": "false"
   }

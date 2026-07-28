@@ -170,6 +170,83 @@ def digest(req: func.HttpRequest) -> func.HttpResponse:
 
 
 # ---------------------------------------------------------------------------
+# Taste profile — the slow, legible half of the learning loop
+# ---------------------------------------------------------------------------
+@app.timer_trigger(
+    schedule="%PROFILE_SCHEDULE%",
+    arg_name="timer",
+    run_on_startup=False,
+    use_monitor=True,
+)
+def profile_timer(timer: func.TimerRequest) -> None:
+    from pipeline.profile import rewrite_profile
+
+    result = rewrite_profile()
+    if result.rewritten:
+        log.info("Profile now at v%d: %s", result.version, result.changelog)
+    else:
+        log.info("Profile unchanged: %s", result.reason)
+
+
+@app.route(route="profile", methods=["GET"], auth_level=func.AuthLevel.FUNCTION)
+def get_profile(req: func.HttpRequest) -> func.HttpResponse:
+    """What the filter currently believes about you, and how it got there."""
+    from pipeline.profile import load_profile_doc
+
+    doc = load_profile_doc()
+    return _json(
+        {
+            "text": doc.get("text", ""),
+            "version": doc.get("version", 0),
+            "changelog": doc.get("changelog", ""),
+            "source": doc.get("source", "default"),
+            "updatedAt": doc.get("updated_at"),
+            "history": doc.get("history", []),
+        }
+    )
+
+
+@app.route(route="profile", methods=["PUT"], auth_level=func.AuthLevel.FUNCTION)
+def put_profile(req: func.HttpRequest) -> func.HttpResponse:
+    """Hand-edit the profile.
+
+    A manual edit is versioned like any other and is used verbatim by the next
+    scoring run — this is the steering wheel for when the automatic rewrite
+    drifts somewhere you don't want.
+    """
+    from pipeline.profile import save_profile
+
+    try:
+        body = req.get_json()
+    except ValueError:
+        return _json({"error": "body must be JSON"}, status=400)
+
+    text = (body.get("text") or "").strip()
+    if len(text) < 100:
+        return _json({"error": "profile text must be at least 100 characters"}, status=400)
+
+    version = save_profile(text, body.get("changelog") or "Edited by hand.", source="manual")
+    return _json({"ok": True, "version": version})
+
+
+@app.route(route="profile/rewrite", methods=["POST"], auth_level=func.AuthLevel.FUNCTION)
+def rewrite_profile_now(req: func.HttpRequest) -> func.HttpResponse:
+    """Trigger the rewrite on demand rather than waiting for the weekly timer."""
+    from pipeline.profile import rewrite_profile
+
+    result = rewrite_profile()
+    return _json(
+        {
+            "rewritten": result.rewritten,
+            "reason": result.reason,
+            "version": result.version,
+            "changelog": result.changelog,
+            "estimated_usd": round(result.cost_usd, 6),
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
 # Feedback
 # ---------------------------------------------------------------------------
 @app.route(route="feedback", methods=["POST"], auth_level=func.AuthLevel.FUNCTION)

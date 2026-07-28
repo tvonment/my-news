@@ -171,6 +171,12 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
           value: digestSchedule
         }
         {
+          // Weekly, Sunday 03:00 UTC — after the overnight digest, before the
+          // morning one, so a rewrite is in place for the first read of the week.
+          name: 'PROFILE_SCHEDULE'
+          value: '0 0 3 * * 0'
+        }
+        {
           name: 'DAILY_TOKEN_BUDGET_USD'
           value: dailyTokenBudgetUsd
         }

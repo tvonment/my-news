@@ -77,17 +77,37 @@ On a real device, enter the URL and key in Settings instead — the environment
 seeding is `#if DEBUG` only and the key goes to the Keychain,
 `AfterFirstUnlockThisDeviceOnly`, so it never lands in a backup.
 
-**Two toolchain notes, both discovered the hard way:**
+### Running on a real iPhone
 
-- **There is no asset catalog.** Xcode 26.4.1 ships the iOS 26.4 SDK but only
-  the 26.2 simulator *runtime* is installed here, and `actool` refuses to run
-  without a runtime matching the SDK — it fails the whole build with
-  *"No simulator runtime version … available to use with iphonesimulator SDK
-  version"*. Removing the (placeholder) catalog unblocks it at the cost of the
-  default app icon. Fix properly with `xcodebuild -downloadPlatform iOS`, then
-  re-add `Assets.xcassets` and the two `ASSETCATALOG_COMPILER_*` build settings.
-- **Building to a physical iPhone needs that same download** — the iOS 26.4
-  *device* platform isn't installed either.
+The simulator needs nothing beyond the steps above. A device build additionally
+needs an Apple ID signed in to **Xcode → Settings → Accounts** — a codesigning
+identity in the keychain is not enough on its own, because Xcode needs the
+account to generate a provisioning profile. Without it:
+
+```
+error: No Account for Team "…". Add a new account in Accounts settings…
+error: No profiles for 'com.vonmentlen.mynews' were found
+```
+
+Sign in, then `xcodebuild … -sdk iphoneos -allowProvisioningUpdates build`
+registers the App ID and creates the profile automatically. The phone must also
+be connected and unlocked — `xcrun devicectl list devices` shows `unavailable`
+until it is.
+
+### The simulator-runtime trap
+
+If `actool` fails the build with *"No simulator runtime version … available to
+use with iphonesimulator SDK version"*, the installed simulator runtime doesn't
+match the SDK Xcode shipped with. It fails the **whole build** rather than
+degrading, and the message doesn't mention that a download is what's missing.
+
+```sh
+xcodebuild -downloadPlatform iOS   # ~8.5 GB
+```
+
+Xcode 26.4.1 ships the iOS 26.4 SDK but installs only older runtimes, so this
+bites on a fresh machine. Removing `Assets.xcassets` is a valid stopgap that
+costs only the app icon.
 
 ## Things that will cost you money if changed
 
