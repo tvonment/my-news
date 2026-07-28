@@ -68,6 +68,13 @@ struct APIClient {
         return try JSONDecoder().decode(FeedResponse.self, from: data).items
     }
 
+    func categories() async throws -> [CategorySummary] {
+        let data = try await send(
+            request(url: baseURL.appending(path: "api/categories"), method: "GET")
+        )
+        return try JSONDecoder().decode(CategoriesResponse.self, from: data).categories
+    }
+
     func sendFeedback(articleID: String, signal: Vote) async throws {
         var req = request(url: baseURL.appending(path: "api/feedback"), method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

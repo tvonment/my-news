@@ -23,7 +23,15 @@ struct FeedView: View {
                         await store.refresh(context: context, settings: settings)
                     }
                 } else {
-                    feedList
+                    VStack(spacing: 0) {
+                        CategoryChips(
+                            categories: store.categories,
+                            selected: store.selectedCategory,
+                            articles: articles,
+                            onSelect: { store.selectedCategory = $0 }
+                        )
+                        feedList
+                    }
                 }
             }
             .navigationTitle("MyNews")
@@ -37,11 +45,23 @@ struct FeedView: View {
             }
         }
         .task {
+            guard settings.isConfigured else { return }
             // Cached articles render immediately; this only tops them up.
-            if settings.isConfigured, articles.isEmpty {
+            if articles.isEmpty {
                 await store.refresh(context: context, settings: settings)
+            } else {
+                await store.loadCategories(settings: settings)
             }
         }
+    }
+
+    /// Articles matching the selected chip.
+    ///
+    /// Filtered in memory rather than by re-querying: the feed is at most a few
+    /// hundred rows, and switching chips should be instant and work offline.
+    private var visible: [Article] {
+        guard let selected = store.selectedCategory else { return articles }
+        return articles.filter { $0.categories.contains(selected) }
     }
 
     private var feedList: some View {
@@ -54,7 +74,16 @@ struct FeedView: View {
                 }
             }
 
-            ForEach(articles) { article in
+            if visible.isEmpty {
+                ContentUnavailableView {
+                    Label("Nothing here yet", systemImage: "tray")
+                } description: {
+                    Text("No articles in this category from the latest run.")
+                }
+                .listRowSeparator(.hidden)
+            }
+
+            ForEach(visible) { article in
                 NavigationLink {
                     ArticleDetailView(article: article)
                 } label: {

@@ -16,6 +16,18 @@ struct ArticleCard: View {
                         .foregroundStyle(.tertiary)
                 }
 
+                if article.satire {
+                    // Deliberately loud. The summary below is written in the
+                    // same flat voice as real news, so this badge is the only
+                    // thing telling the reader it's a joke.
+                    Text("SATIRE")
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(.orange.opacity(0.2), in: RoundedRectangle(cornerRadius: 4))
+                        .foregroundStyle(.orange)
+                }
+
                 Spacer(minLength: 4)
 
                 if article.paywalled {
@@ -60,6 +72,16 @@ struct ArticleCard: View {
                                 .lineLimit(2)
                         }
                     }
+                }
+                if !article.alsoReportedBy.isEmpty {
+                    Label(
+                        "Also: \(article.alsoReportedBy.joined(separator: ", "))",
+                        systemImage: "square.stack.3d.up"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .padding(.top, 2)
                 }
             } else if !article.lead.isEmpty {
                 // Not summarized yet — it scored below the threshold, or the

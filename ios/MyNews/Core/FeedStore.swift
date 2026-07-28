@@ -19,6 +19,11 @@ final class FeedStore {
 
     var state: LoadState = .idle
     var lastSynced: Date?
+    /// The taxonomy as the backend defines it. Counts are ignored — the chips
+    /// count the articles actually loaded — so this is really the label list.
+    var categories: [CategorySummary] = TaxonomyCache.load()
+    /// nil means "All".
+    var selectedCategory: String?
 
     /// Fetch the feed and reconcile it into the cache.
     ///
@@ -38,11 +43,31 @@ final class FeedStore {
 
             let dtos = try await client.feed(minRelevance: settings.minRelevance)
             try upsert(dtos, into: context)
+            await loadCategories(settings: settings)
+
             lastSynced = .now
             state = .idle
         } catch {
             state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
         }
+    }
+
+    /// Refresh the taxonomy on its own.
+    ///
+    /// Deliberately separate from `refresh`: on a normal launch the feed renders
+    /// straight from the offline cache and never hits the network, so folding
+    /// this into `refresh` meant the chips only appeared after a manual pull.
+    ///
+    /// Failure is silent by design — a feed without chips is still a usable
+    /// feed, and the cached taxonomy from last time covers the offline case.
+    func loadCategories(settings: AppSettings) async {
+        guard let client = try? APIClient(settings: settings),
+              let fetched = try? await client.categories(),
+              !fetched.isEmpty
+        else { return }
+
+        categories = fetched
+        TaxonomyCache.save(fetched)
     }
 
     private func upsert(_ dtos: [ArticleDTO], into context: ModelContext) throws {
@@ -111,5 +136,24 @@ final class FeedStore {
             }
         }
         try? context.save()
+    }
+}
+
+/// The last taxonomy the backend served.
+///
+/// The backend stays authoritative; this only remembers its last answer so a
+/// cold launch with no network still gets chips. It's a handful of short
+/// strings, which is why it lives in UserDefaults rather than SwiftData.
+private enum TaxonomyCache {
+    private static let key = "taxonomy.v1"
+
+    static func load() -> [CategorySummary] {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([CategorySummary].self, from: data)) ?? []
+    }
+
+    static func save(_ categories: [CategorySummary]) {
+        guard let data = try? JSONEncoder().encode(categories) else { return }
+        UserDefaults.standard.set(data, forKey: key)
     }
 }
