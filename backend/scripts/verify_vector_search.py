@@ -1,20 +1,24 @@
 #!/usr/bin/env python
 """M0 gate: does vector search actually work on a FREE-TIER Cosmos account?
 
-This is the single assumption in the plan that no first-party Microsoft doc
-confirms or denies. Vector search is GA, and the free tier is GA, but nothing
-states they compose — and the decision is expensive to get wrong, because
-`enableFreeTier` can only be set at account creation and there is exactly one
-free-tier account per subscription.
+SUPERSEDED — this script no longer describes the deployed system, and running it
+against it will fail. Kept because the question it asks is the one you would ask
+again before re-introducing a vector policy.
 
-Run after `azd up`:
+The fallback this script's exit-1 branch recommends is what shipped, though for
+a reason it never anticipated. On 2026-08-02 the Cosmos data plane stopped being
+able to deserialize the container's own `dataType: 'float16'` vector policy and
+returned InternalServerError for every query on it. The policy was dropped from
+infra/modules/data.bicep to recover, and not re-added: nothing in the pipeline
+ever issued a VectorDistance query. All similarity is NumPy over embeddings read
+out of Cosmos (pipeline/gate.py, pipeline/cluster.py).
+
+So the storage design is now exactly the "fall back" case below — vectors are
+ordinary document properties, excluded from the index, compared in-process.
+
+If you ever do re-add a vector policy, run this first, and use `float32`.
 
     cd backend && .venv/bin/python scripts/verify_vector_search.py
-
-Exit 0 means the plan's storage design holds. Exit 1 means fall back to keeping
-vectors in a packed blob and doing cosine similarity in NumPy inside the
-Function (~$0.04/month, no RU accounting) — the container's vector policy would
-then be dropped from infra/modules/data.bicep.
 """
 
 from __future__ import annotations
@@ -43,6 +47,13 @@ def main() -> int:
     settings = get_settings()
     dims = settings.embedding_dimensions
     container = cosmos.get_container()
+
+    # Fail loudly and correctly rather than letting Cosmos reject VectorDistance
+    # with a message that reads like a query bug.
+    if not container.read().get("vectorEmbeddingPolicy", {}).get("vectorEmbeddings"):
+        print("This container has no vector policy — see the module docstring.")
+        print("Nothing to verify; VectorDistance would be rejected outright.")
+        return 1
 
     print(f"Cosmos:     {settings.cosmos_endpoint}")
     print(f"Container:  {settings.cosmos_database}/{settings.cosmos_container}")

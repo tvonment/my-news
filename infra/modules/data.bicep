@@ -7,9 +7,6 @@ param resourceToken string
 @maxValue(1000)
 param containerThroughput int = 1000
 
-@description('Embedding dimensions. text-embedding-3-small is truncated to this via the `dimensions` parameter (Matryoshka). NOTE: a vector policy cannot be edited in place — changing this means recreating the container and re-ingesting.')
-param embeddingDimensions int = 512
-
 var cosmosAccountName = 'cosmos-mynews-${resourceToken}'
 var databaseName = 'mynews'
 var containerName = 'items'
@@ -23,10 +20,10 @@ var deploymentContainerName = 'app-package'
 // serverless ("Free tier is currently not available for serverless accounts"),
 // which is why this is a provisioned account despite the low traffic.
 //
-// `EnableNoSQLVectorSearch` on a free-tier account is the one assumption in the
-// plan no first-party doc confirms — this deployment is the test. If it fails,
-// drop the capability + vectorEmbeddingPolicy and fall back to packed-blob
-// similarity in NumPy (see scripts/verify_vector_search.py).
+// `EnableNoSQLVectorSearch` is kept even though the container no longer carries
+// a vector policy (see the container resource below): account capabilities are
+// effectively additive, and attempting to remove one risks an ARM rejection for
+// no benefit. It costs nothing while unused.
 // ---------------------------------------------------------------------------
 resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
   name: cosmosAccountName
@@ -113,32 +110,30 @@ resource container 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/container
           }
           {
             // Keep the ~1 KB vector out of the regular index — it would be
-            // duplicated per document for a lookup we never perform.
+            // duplicated per document for a lookup we never perform. Still
+            // correct, and now load-bearing on its own: with the vector policy
+            // gone this is the only thing keeping /embedding out of the index.
             path: '/embedding/*'
           }
         ]
-        vectorIndexes: [
-          {
-            path: '/embedding'
-            // quantizedFlat, not diskANN: DiskANN only pays off above ~50k
-            // vectors and costs ~65 RU/insert vs ~35 RU for quantizedFlat.
-            // Note both silently full-scan below 1,000 indexed vectors.
-            type: 'quantizedFlat'
-          }
-        ]
       }
-      vectorEmbeddingPolicy: {
-        vectorEmbeddings: [
-          {
-            path: '/embedding'
-            // float16 halves vector storage and insert RU vs float32 for a
-            // "small" recall impact. If ARM rejects this, use 'float32'.
-            dataType: 'float16'
-            dimensions: embeddingDimensions
-            distanceFunction: 'cosine'
-          }
-        ]
-      }
+      // NO vectorEmbeddingPolicy / vectorIndexes, deliberately.
+      //
+      // This container originally declared `dataType: 'float16'` on /embedding.
+      // ARM accepted it and Microsoft's docs list float16 as supported — but on
+      // 2026-08-02 the Cosmos *data plane* began failing to deserialize its own
+      // stored policy, returning InternalServerError for every query, every
+      // change-feed read and every ReadFeed on the container. Point reads and
+      // writes kept working, so the pipeline half-ran for two days while the
+      // app 500'd. The policy was dropped in place to recover.
+      //
+      // It is not re-added as float32 because nothing ever used it: no code path
+      // issues a VectorDistance query. All similarity is NumPy over embeddings
+      // read out of Cosmos (pipeline/gate.py, pipeline/cluster.py). The policy
+      // was pure cost and, in the end, the sole cause of an outage.
+      //
+      // Re-adding one means re-adding a vector index too, and the embedding
+      // dimensions would have to match core/config.py's EMBEDDING_DIMENSIONS.
     }
   }
 }

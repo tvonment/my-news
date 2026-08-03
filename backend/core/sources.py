@@ -88,7 +88,15 @@ def load_sources(seed_if_missing: bool = True) -> list[Source]:
         save_sources(sources)
         return sources
 
-    known = {entry["id"]: Source(**entry) for entry in doc.get("sources", [])}
+    # Filter to fields `Source` still declares. Unfiltered `Source(**entry)`
+    # means the day a field is renamed or dropped, every stored entry raises
+    # TypeError and load_sources() takes down harvest, feed and refresh at once.
+    # `pipeline/harvest.py` reads SourceState the same defensive way.
+    fields = set(Source.__dataclass_fields__)
+    known = {
+        entry["id"]: Source(**{k: v for k, v in entry.items() if k in fields})
+        for entry in doc.get("sources", [])
+    }
     seed = _from_seed()
     added = [s for s in seed if s.id not in known]
 

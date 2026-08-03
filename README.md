@@ -15,7 +15,7 @@ volume, against a $99/year Apple Developer Program membership that costs more th
 | M1 — harvest: fetch, dedupe, persist | **live** — 34 feeds, 1,348 articles on first run |
 | M2 — embeddings gate, scoring, summaries | **live** — first digest cost $0.09 |
 | M3 — iOS app v1 | **live** — runs in the simulator and builds signed for device |
-| M4 — feedback loop | **done** — votes update the centroids; weekly profile rewrite ships too |
+| M4 — feedback loop | **partial** — votes update the centroids. The weekly profile rewrite is written but had never run: `PROFILE_SCHEDULE` reached Bicep an hour after the last `azd provision` and was never deployed, so the timer failed to bind and `/api/profile` served the built-in default. Fixed 2026-08-03. |
 | M5 — in-app settings | not started |
 | M6 — digest + APNs push | not started |
 | M7 — MCP server, "dig deeper" agent | not started |
@@ -31,7 +31,7 @@ backend/        Python Azure Functions (v2 model).
   core/         config, cosmos, foundry, budget, models, sources
   fetch/        HTTP with conditional GET; parsing and canonicalization
   pipeline/     harvest, gate, score, summarize, digest, profile
-  scripts/      probe_feeds.py, verify_vector_search.py
+  scripts/      probe_feeds.py, rescue_dump.py
   tests/        pytest, no network
 ```
 
@@ -51,9 +51,12 @@ cd backend && uv venv --python 3.12 .venv && uv pip install -r requirements.txt 
 # 4. Deploy (creates real Azure resources — read the warnings below first)
 cd .. && azd auth login && azd up
 
-# 5. Verify the one unproven assumption in the plan
-cd backend && .venv/bin/python scripts/verify_vector_search.py
+# 5. Rescue every point-readable document (see "The float16 outage" below)
+cd backend && .venv/bin/python scripts/rescue_dump.py
 ```
+
+`scripts/verify_vector_search.py` is superseded — the container no longer has a
+vector policy. See below.
 
 ## Running the iOS app
 
@@ -144,6 +147,67 @@ These are load-bearing. Each one is the difference between ~$8/month and a lot m
 
 Azure OpenAI has **no hard spend limit**. The brakes are the budget alert in Bicep and
 `DAILY_TOKEN_BUDGET_USD` in `core/budget.py`.
+
+## The float16 outage
+
+On **2026-08-02 08:30 UTC** every query against the Cosmos container started
+returning:
+
+```
+(InternalServerError) Error converting value "float16" to type 'Microsoft.Azure.Cosmos.VectorDataType'.
+Path 'vectorEmbeddingPolicy.vectorEmbeddings[0].dataType'
+```
+
+The container had been created with `dataType: 'float16'`. Microsoft's docs list
+float16 as a supported value and ARM accepted it — five days later the *data
+plane* could no longer deserialize the policy it had stored. Nothing had been
+deployed. The Bicep comment guarded the wrong risk: *"If ARM rejects this, use
+float32."* ARM never rejects it. **Control-plane validation is looser than
+data-plane support**, and there is no way to discover that at deploy time.
+
+What it took down, and what it didn't:
+
+| | |
+|---|---|
+| Queries — cross-partition, single-partition, change feed, ReadFeed | **all 500** |
+| Raw REST, every `x-ms-version` from 2015-12-16 to 2025-04-15 | **all 500** |
+| Point reads | mostly fine, intermittently 500; a retry clears it |
+| Writes | fine — harvest kept creating documents it could no longer read |
+
+Point reads surviving is what makes this recoverable: `scripts/rescue_dump.py`
+reconstructs document ids without asking Cosmos what exists. Config and
+`source_state` ids are fixed; article ids are content-addressed
+(`base64url(sha256(canonical_url))`, bucketed by publish date), so re-fetching
+the feeds regenerates them. Feedback events are unrecoverable — their ids embed a
+microsecond timestamp — but the learned state lives in the `centroids` document,
+which is a point read.
+
+**The fix was to delete the vector policy, not repair it.** Nothing in this
+codebase ever issued a `VectorDistance` query; all similarity is NumPy over
+embeddings read out of Cosmos (`pipeline/gate.py`, `pipeline/cluster.py`). The
+policy was unused infrastructure that existed only to break production. Two
+things follow:
+
+- `az cosmosdb sql container update` is **read-modify-write**. Omitting
+  `--vector-embeddings` silently re-applies the stored policy. `--idx` alone
+  fixes nothing, and `--idx` replaces the *whole* indexing policy, so
+  `excludedPaths` has to be restated verbatim.
+- `azd provision` would have re-applied `float16` straight from `data.bicep`.
+  Edit the Bicep **before** the next provision, and gate it with
+  `az deployment sub what-if` (`main.bicep` is subscription-scoped).
+
+Two things made a two-day total outage invisible:
+
+- **No alerting existed.** App Insights' Failure Anomalies rule failed to deploy
+  on day one with `MissingSubscriptionRegistration: Microsoft.AlertsManagement`,
+  and nobody noticed a failed deployment of a monitoring rule. The only monitor
+  was the cost budget — and an outage costs *less* than working, so it can never
+  fire.
+- **`/api/health` lied.** It probed Cosmos with a point read, the one operation
+  that kept working. Sampled 8 times mid-outage it answered `healthy` 3 times. It
+  now issues a cheap single-partition query as well, so it exercises the path
+  that actually breaks. A health check that doesn't touch the failing dependency
+  is worse than none — it launders an outage into a green dashboard.
 
 ## Models
 

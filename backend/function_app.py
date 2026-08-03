@@ -13,14 +13,13 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
 from typing import Any
 
 import azure.functions as func
 
 from core import cosmos
 from core.config import get_settings
-from core.models import USER_PK, RUN_PK
+from core.models import USER_PK, RUN_PK, iso, utcnow
 
 app = func.FunctionApp()
 log = logging.getLogger(__name__)
@@ -64,6 +63,12 @@ def health(req: func.HttpRequest) -> func.HttpResponse:
         # Point read of a document that may not exist: ~1 RU, proves both the
         # managed-identity token and the data-plane role assignment work.
         cosmos.read("settings", USER_PK)
+        # And a query, because a point read alone is not a health check. During
+        # the 2026-08-02 outage every query on this container returned
+        # InternalServerError while point reads kept mostly working, so this
+        # endpoint answered "healthy" on 3 of 8 probes with the whole app down.
+        # Single-partition and counting only, so it stays ~2-3 RU.
+        cosmos.query("SELECT VALUE COUNT(1) FROM c", partition_key=USER_PK)
         checks["cosmos"] = "ok"
     except Exception as exc:
         healthy = False
@@ -280,7 +285,11 @@ def feedback(req: func.HttpRequest) -> func.HttpResponse:
     if article is None:
         return _json({"error": "unknown articleId"}, status=404)
 
-    now = datetime.now(timezone.utc).isoformat()
+    # `iso()` rather than a bare `isoformat()`: the latter ends in "+00:00", and
+    # `core/models.py` exists to keep "+" out of document ids because Cosmos hits
+    # known SDK bugs on them. Seconds precision is enough — the id also carries
+    # the article, so the only thing it collapses is a double-tap on one card.
+    now = iso(utcnow())
     cosmos.upsert(
         {
             "id": f"evt_{now}_{article_id}",
@@ -349,11 +358,15 @@ def feed(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         items = cosmos.query(sql, parameters, max_items=limit)
+        # Shaping stays inside the `try`: `_feed_item` subscripts `item["id"]`,
+        # so a malformed document would otherwise escape as a bare 500 past the
+        # handler written to prevent exactly that.
+        payload = [_feed_item(i) for i in items]
     except Exception as exc:
         log.exception("Feed query failed")
         return _json({"error": str(exc)}, status=500)
 
-    return _json({"count": len(items), "items": [_feed_item(i) for i in items]})
+    return _json({"count": len(payload), "items": payload})
 
 
 def _feed_item(item: dict[str, Any]) -> dict[str, Any]:
@@ -392,15 +405,26 @@ def categories(req: func.HttpRequest) -> func.HttpResponse:
     """
     from core.taxonomy import CATEGORIES, CATEGORY_LABELS
 
+    # Counted server-side with JOIN + GROUP BY rather than by pulling every
+    # scored article back and tallying in Python. The old form had no LIMIT and
+    # no max_items, so `cosmos.query`'s `list()` materialised the entire archive
+    # on every call — and the app now hits this on every foreground.
+    #
+    # The result set is one row per distinct tag, not per article. That includes
+    # the ~213 free-text tags the scorer invented before the taxonomy closed;
+    # they are dropped below, same as before.
     rows = cosmos.query(
-        "SELECT c.categories FROM c WHERE c.type = 'article' AND IS_DEFINED(c.relevance) "
-        "AND (NOT IS_DEFINED(c.cluster_id) OR IS_NULL(c.cluster_id) OR c.cluster_id = c.id)"
+        "SELECT c.name AS name, COUNT(1) AS n FROM ("
+        "SELECT VALUE {'name': cat} FROM a JOIN cat IN a.categories "
+        "WHERE a.type = 'article' AND IS_DEFINED(a.relevance) "
+        "AND (NOT IS_DEFINED(a.cluster_id) OR IS_NULL(a.cluster_id) OR a.cluster_id = a.id)"
+        ") AS c GROUP BY c.name"
     )
     counts: dict[str, int] = {name: 0 for name in CATEGORIES}
     for row in rows:
-        for name in row.get("categories") or []:
-            if name in counts:
-                counts[name] += 1
+        name = row.get("name")
+        if name in counts:
+            counts[name] = row.get("n", 0)
 
     return _json(
         {

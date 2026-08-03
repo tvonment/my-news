@@ -41,6 +41,10 @@ ios/**/.DS_Store
 scratch/
 *.local.json
 
+# Point-read rescue dumps (scripts/rescue_dump.py). Real article content and
+# the taste profile — never commit them.
+rescue/
+
 # Tooling session state
 .omc/
 **/.omc/

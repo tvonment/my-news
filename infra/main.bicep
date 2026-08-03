@@ -108,6 +108,18 @@ module functions './modules/functions.bicep' = {
   }
 }
 
+module alerts './modules/alerts.bicep' = {
+  name: 'alerts'
+  scope: rg
+  params: {
+    location: location
+    tags: tags
+    alertEmail: alertEmail
+    cosmosAccountName: data.outputs.cosmosAccountName
+    appInsightsId: monitoring.outputs.appInsightsId
+  }
+}
+
 module budget './modules/budget.bicep' = {
   name: 'budget'
   scope: rg
