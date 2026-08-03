@@ -24,6 +24,15 @@ from core.models import USER_PK, RUN_PK, iso, utcnow
 app = func.FunctionApp()
 log = logging.getLogger(__name__)
 
+# The Azure SDK logs every HTTP request and response at Information level. One
+# harvest that creates 112 documents emits over 2,000 trace lines, which blows
+# straight through host.json's 5-items/second sampling cap and takes the lines
+# that matter with it — the "Harvest complete" summary was being dropped from
+# exactly the runs that did the most work. Errors still surface: they travel as
+# exceptions, which sampling excludes.
+logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
+logging.getLogger("azure.identity").setLevel(logging.WARNING)
+
 
 def _json(payload: dict[str, Any], status: int = 200) -> func.HttpResponse:
     return func.HttpResponse(
@@ -403,33 +412,26 @@ def categories(req: func.HttpRequest) -> func.HttpResponse:
     Served from the backend rather than hardcoded in the app so the two can
     never disagree about what the categories are.
     """
-    from core.taxonomy import CATEGORIES, CATEGORY_LABELS
+    from core.taxonomy import CATEGORIES, CATEGORY_LABELS, COUNTS_DOC_ID
 
-    # Counted server-side with JOIN + GROUP BY rather than by pulling every
-    # scored article back and tallying in Python. The old form had no LIMIT and
-    # no max_items, so `cosmos.query`'s `list()` materialised the entire archive
-    # on every call — and the app now hits this on every foreground.
+    # A point read of counts written by the last digest, not a scan.
     #
-    # The result set is one row per distinct tag, not per article. That includes
-    # the ~213 free-text tags the scorer invented before the taxonomy closed;
-    # they are dropped below, same as before.
-    rows = cosmos.query(
-        "SELECT c.name AS name, COUNT(1) AS n FROM ("
-        "SELECT VALUE {'name': cat} FROM a JOIN cat IN a.categories "
-        "WHERE a.type = 'article' AND IS_DEFINED(a.relevance) "
-        "AND (NOT IS_DEFINED(a.cluster_id) OR IS_NULL(a.cluster_id) OR a.cluster_id = a.id)"
-        ") AS c GROUP BY c.name"
-    )
-    counts: dict[str, int] = {name: 0 for name in CATEGORIES}
-    for row in rows:
-        name = row.get("name")
-        if name in counts:
-            counts[name] = row.get("n", 0)
+    # This used to query every scored article in the container and tally them in
+    # Python — no LIMIT, no max_items, materialised by `cosmos.query`'s `list()`
+    # — which measured at ~168 RU and ~4,200 rows, on every app foreground, and
+    # grew with the archive. Counting only when scoring changes them turns that
+    # into ~1 RU flat.
+    #
+    # Before the first digest the document does not exist yet and every bucket
+    # reports zero. The labels are what the app renders the chips from; it counts
+    # the articles it actually loaded rather than trusting these numbers.
+    stored = cosmos.read(COUNTS_DOC_ID, USER_PK) or {}
+    counts: dict[str, int] = stored.get("counts", {})
 
     return _json(
         {
             "categories": [
-                {"id": name, "label": CATEGORY_LABELS[name], "count": counts[name]}
+                {"id": name, "label": CATEGORY_LABELS[name], "count": counts.get(name, 0)}
                 for name in CATEGORIES
             ]
         }

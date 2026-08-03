@@ -97,11 +97,22 @@ resource cosmosServerErrors 'Microsoft.Insights/metricAlerts@2018-03-01' = {
   }
 }
 
-// The backstop: harvest runs every 30 minutes and logs one line when it finishes,
-// so three hours of silence means the pipeline is dead regardless of the cause —
-// broken dependency, failed deploy, unbound timer, throttled account.
+// The backstop: harvest runs every 30 minutes, so three hours without a
+// SUCCESSFUL one means the pipeline is dead regardless of cause — broken
+// dependency, failed deploy, unbound timer, throttled account.
 //
-// `summarize` is load-bearing: a bare filter returns zero ROWS when nothing
+// This counts `requests` (function executions), not a log line. The first
+// version of this rule matched the "Harvest complete" trace, which adaptive
+// sampling drops precisely on the runs that do the most work: a harvest that
+// created 112 documents emitted >2,000 SDK trace lines and its own summary line
+// was discarded with them. `host.json` now excludes Request from sampling, so
+// executions are the one signal guaranteed to be complete.
+//
+// `success == true` matters as much as the count: the two-day float16 outage ran
+// harvest on schedule the whole time and every single run failed. A rule that
+// only counted executions would have stayed green throughout it.
+//
+// `summarize` is load-bearing too: a bare filter returns zero ROWS when nothing
 // matched, and a rule with no rows to evaluate does not fire. Summarising to a
 // single row means the "nothing happened" case still produces a 0 to compare.
 resource pipelineSilent 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = {
@@ -120,7 +131,7 @@ resource pipelineSilent 'Microsoft.Insights/scheduledQueryRules@2023-03-15-previ
     criteria: {
       allOf: [
         {
-          query: 'traces | where message startswith "Harvest complete" | summarize Runs = count()'
+          query: 'requests | where name == "harvest_timer" | where success == true | summarize Runs = count()'
           metricMeasureColumn: 'Runs'
           timeAggregation: 'Total'
           operator: 'LessThan'

@@ -5,13 +5,13 @@
       "default": "Warning",
       "Function": "Information",
       "Host.Aggregator": "Warning",
-      "Host.Results": "Warning"
+      "Host.Results": "Information"
     },
     "applicationInsights": {
       "samplingSettings": {
         "isEnabled": true,
         "maxTelemetryItemsPerSecond": 5,
-        "excludedTypes": "Exception"
+        "excludedTypes": "Exception;Request"
       }
     }
   },

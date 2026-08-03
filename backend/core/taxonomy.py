@@ -29,6 +29,14 @@ CATEGORIES: tuple[str, ...] = (
     "fun",
 )
 
+# Per-bucket article counts, recomputed at the end of each digest and served to
+# the app as a point read. Counting on demand meant a cross-partition scan of the
+# whole archive (~168 RU, ~4,200 rows) on every app foreground; this is ~1 RU and
+# does not grow with the archive. Counts are therefore "as of the last digest" —
+# which is the only moment they change, since nothing but scoring assigns a
+# category.
+COUNTS_DOC_ID = "category_counts"
+
 CATEGORY_LABELS: dict[str, str] = {
     "ai": "AI",
     "apple": "Apple",

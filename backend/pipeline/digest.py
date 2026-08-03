@@ -12,10 +12,44 @@ import logging
 
 from core import cosmos
 from core.budget import DailyBudget
-from core.models import RunRecord, iso, utcnow
+from core.models import USER_PK, RunRecord, iso, utcnow
+from core.taxonomy import CATEGORIES, COUNTS_DOC_ID
 from pipeline import cluster, gate, score, summarize
 
 log = logging.getLogger(__name__)
+
+
+def refresh_category_counts() -> dict[str, int]:
+    """Recount the buckets and store them for `GET /api/categories` to point-read.
+
+    Scoring is the only thing that assigns a category, so the counts can only
+    change here. Doing it once per digest instead of once per app foreground is
+    the difference between ~168 RU a few times a day and ~168 RU every time the
+    phone comes out of a pocket.
+
+    Only the closed taxonomy is counted; the ~213 free-text tags the scorer
+    invented before the vocabulary closed are dropped, as they always were.
+    """
+    counts = {name: 0 for name in CATEGORIES}
+    rows = cosmos.query(
+        "SELECT c.categories FROM c WHERE c.type = 'article' AND IS_DEFINED(c.relevance) "
+        "AND (NOT IS_DEFINED(c.cluster_id) OR IS_NULL(c.cluster_id) OR c.cluster_id = c.id)"
+    )
+    for row in rows:
+        for name in row.get("categories") or []:
+            if name in counts:
+                counts[name] += 1
+
+    cosmos.upsert(
+        {
+            "id": COUNTS_DOC_ID,
+            "pk": USER_PK,
+            "type": "config",
+            "counts": counts,
+            "updated_at": iso(utcnow()),
+        }
+    )
+    return counts
 
 
 def run_digest() -> RunRecord:
@@ -57,6 +91,11 @@ def run_digest() -> RunRecord:
             # Sum the per-call costs rather than repricing the aggregate: the
             # long-context flag is a property of one request, not of a total.
             record.estimated_usd = round(score_result.cost_usd + summary_result.cost_usd, 6)
+
+            # Scoring just changed which buckets articles sit in, so this is the
+            # one moment the counts are stale. The early return above skips it on
+            # purpose: nothing was scored, so nothing moved.
+            refresh_category_counts()
 
         except Exception as exc:
             record.ok = False
