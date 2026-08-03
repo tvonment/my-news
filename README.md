@@ -209,6 +209,26 @@ Two things made a two-day total outage invisible:
   that actually breaks. A health check that doesn't touch the failing dependency
   is worse than none — it launders an outage into a green dashboard.
 
+Building the alert then hit two traps worth remembering, because both make a
+dead pipeline look identical to a healthy one:
+
+- **Adaptive sampling eats the evidence when you need it most.** The Azure SDK
+  logs every HTTP request at Information level, so one harvest creating 112
+  documents emitted 2,154 trace lines in ten minutes and blew through
+  `host.json`'s 5-items/second cap — discarding its own `Harvest complete`
+  summary along with the noise. An alert matching that text would have paged on
+  a *healthy busy* pipeline. `function_app.py` now silences the SDK's HTTP and
+  identity loggers (2,154 → 170) and the alert counts function executions, which
+  `host.json` excludes from sampling outright.
+- **`"Host.Results": "Warning"` means successful executions are never recorded
+  at all** — only failures reach Application Insights. Any rule counting
+  successes would have read zero forever. It is now `Information`.
+
+The rule that shipped counts *successful* `harvest_timer` executions, not
+executions: harvest ran on schedule through the entire two-day outage and failed
+every single time, so counting runs alone would have stayed green throughout.
+Checked against the real window — 23 executions, 0 successful.
+
 ## Models
 
 Deployed: **`gpt-5-nano`** for bulk scoring ($0.05/$0.40 per 1M), **`gpt-5.4`** for summaries
