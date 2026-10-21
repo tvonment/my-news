@@ -392,11 +392,12 @@ since May 2025.
   App Store because personal use is what made the EU press-publishers' right and the private-copying
   exception apply. Serving other people voids both, so v2 justifies what it shows source by source
   instead.
-- **Content is tiered by each source's permission**, enforced in code. Tier A, written permission or
-  a published allowance: the model may read the full text. Tier B, no reservation found: the model
-  reads the headline and the publisher's own feed description. Tier C, an explicit AI/TDM
-  reservation: the model reads the title only. B and C display the same: the headline and that
-  description, capped, verbatim.
+- **Content is tiered by each source's permission**, flagged per catalog source and enforced in code.
+  Tier A, a published allowance (MyNews does not ask publishers for permission; the beta is expected
+  to stay private): the model may read the full text. Tier B, no reservation found: the model reads
+  the headline and the publisher's own feed description. Tier C, an explicit AI/TDM reservation: the
+  model reads the title only. B and C display the same: the headline and that description, capped,
+  verbatim. A source's flag is set once; the code refuses everything the flag does not allow.
 - **AI summaries only where the publisher allows it** (Tier A), labelled as AI-written and
   translated only where the permission covers translation. Everything else shows the publisher's
   own headline and teaser, and publisher text is never machine-translated.
