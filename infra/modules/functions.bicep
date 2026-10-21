@@ -7,34 +7,23 @@ param deploymentContainerName string
 param cosmosAccountName string
 param cosmosDatabaseName string
 param cosmosContainerName string
+@description('Foundry account the Function identity may call. Nothing calls a model between Phase 0 and Phase 2; the grant stays so Phase 2 needs no new one.')
 param foundryAccountName string
-param foundryEndpoint string
-param scorerDeployment string
-param summarizerDeployment string
-param embeddingDeployment string
-param scorerModelId string
-param summarizerModelId string
-param embeddingModelId string
 param appInsightsConnectionString string
 
 @description('Developer object ID, granted Cosmos data-plane read/write so you can inspect data locally. Empty skips the assignment.')
 param developerPrincipalId string = ''
 
-@description('Flex instance memory. 512 MB is deliberate: Flex bills provisioned memory for the WHOLE execution including time blocked on LLM HTTP calls, and this pipeline is ~95% network wait. 2048 MB would cost 4x for identical wall-clock.')
+@description('Flex instance memory. 512 MB is deliberate: Flex bills provisioned memory for the WHOLE execution including time blocked on network calls (feed fetches now, model calls again from Phase 2), and this pipeline is ~95% network wait. 2048 MB would cost 4x for identical wall-clock.')
 @allowed([512, 2048, 4096])
 param instanceMemoryMB int = 512
 
-@description('Ceiling on concurrent instances. Low by design — this is a single-user app and the cap is a runaway-cost brake.')
-param maximumInstanceCount int = 20
+@description('Ceiling on concurrent instances: the runaway-cost brake for everything that is not a model call. This Visual Studio credit subscription gets no free grant, so every execution bills, including a request the app rejects (from Phase 1 a bad token gets its 401 from inside the function, which is still an execution). A flood therefore costs in proportion to how far the app can scale out: at 512 MB, 5 instances flat out are 216,000 GB-s a day, a quarter of what the old cap of 20 allowed. Phase 3\'s load check settles the final value, the smallest one that passes.')
+@minValue(1)
+param maximumInstanceCount int = 5
 
 @description('Harvest cadence. Frequent and cheap (no LLM). Needed because The Verge, NPR and the Microsoft blogs only carry 10 feed items — a 3x/day crawl would silently drop stories.')
 param harvestSchedule string = '0 */30 * * * *'
-
-@description('Digest cadence, in UTC. Flex does not support WEBSITE_TIME_ZONE/TZ, so this cannot follow local time — these are 07:00/12:00/19:00 Vienna in summer, one hour earlier in winter.')
-param digestSchedule string = '0 0 5,10,17 * * *'
-
-@description('Abort LLM stages once the day\'s estimated spend crosses this. Azure OpenAI has NO hard spend limit, so this in-code brake and the budget alert are the only protection.')
-param dailyTokenBudgetUsd string = '1.50'
 
 var functionAppName = 'func-mynews-${resourceToken}'
 
@@ -100,6 +89,15 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
     siteConfig: {
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
+      // This array is the WHOLE set: every provision replaces the app's settings
+      // with exactly these, so a setting added by hand in the portal is wiped,
+      // and one removed here disappears from the live app.
+      //
+      // Phase 0 retired v1's digest and profile runs and removed the settings
+      // only they read: FOUNDRY_ENDPOINT, MODEL_*, REASONING_EFFORT_*,
+      // DIGEST_SCHEDULE, PROFILE_SCHEDULE, DAILY_TOKEN_BUDGET_USD and
+      // PUSH_ENABLED. core/config.py keeps a default for each, so code that
+      // still reads them behaves as before.
       appSettings: [
         {
           name: 'AzureWebJobsStorage__accountName'
@@ -122,67 +120,8 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
           value: cosmosContainerName
         }
         {
-          name: 'FOUNDRY_ENDPOINT'
-          value: foundryEndpoint
-        }
-        {
-          name: 'MODEL_SCORER'
-          value: scorerDeployment
-        }
-        {
-          name: 'MODEL_SUMMARIZER'
-          value: summarizerDeployment
-        }
-        {
-          name: 'MODEL_EMBEDDING'
-          value: embeddingDeployment
-        }
-        // Underlying model ids drive token pricing; the deployment names above
-        // are just labels and carry no cost information.
-        {
-          name: 'MODEL_SCORER_ID'
-          value: scorerModelId
-        }
-        {
-          name: 'MODEL_SUMMARIZER_ID'
-          value: summarizerModelId
-        }
-        {
-          name: 'MODEL_EMBEDDING_ID'
-          value: embeddingModelId
-        }
-        // Reasoning effort is per-model, not global: 'minimal' works only on the
-        // original GPT-5 family (gpt-5-nano), while 'none' requires gpt-5.1 or
-        // later (gpt-5.4). Sending the wrong one is rejected by the API.
-        {
-          name: 'REASONING_EFFORT_SCORER'
-          value: 'minimal'
-        }
-        {
-          name: 'REASONING_EFFORT_SUMMARIZER'
-          value: 'none'
-        }
-        {
           name: 'HARVEST_SCHEDULE'
           value: harvestSchedule
-        }
-        {
-          name: 'DIGEST_SCHEDULE'
-          value: digestSchedule
-        }
-        {
-          // Weekly, Sunday 03:00 UTC — after the overnight digest, before the
-          // morning one, so a rewrite is in place for the first read of the week.
-          name: 'PROFILE_SCHEDULE'
-          value: '0 0 3 * * 0'
-        }
-        {
-          name: 'DAILY_TOKEN_BUDGET_USD'
-          value: dailyTokenBudgetUsd
-        }
-        {
-          name: 'PUSH_ENABLED'
-          value: 'false'
         }
       ]
     }
@@ -193,7 +132,6 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
 
 var storageBlobDataOwner = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
 var storageQueueDataContributor = '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
-var monitoringMetricsPublisher = '3913510d-42f4-4e42-8a64-420c390055eb'
 var cognitiveServicesOpenAIUser = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
 
 resource blobOwnerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -216,15 +154,19 @@ resource queueContributorAssignment 'Microsoft.Authorization/roleAssignments@202
   }
 }
 
-resource metricsPublisherAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: storage
-  name: guid(storage.id, functionApp.id, monitoringMetricsPublisher)
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringMetricsPublisher)
-    principalId: functionApp.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
+// No Monitoring Metrics Publisher. It used to be assigned here on the STORAGE
+// account, where it grants nothing this app uses: its data actions
+// (Metrics/Write, Telemetry/Write) let a caller publish against the resource it
+// is assigned on, and nothing publishes against storage. Telemetry does not go
+// through Entra at all: the SDK sends with the instrumentation key inside
+// APPLICATIONINSIGHTS_CONNECTION_STRING. If ingestion ever moves to Entra
+// (APPLICATIONINSIGHTS_AUTHENTICATION_STRING=Authorization=AAD), grant the role
+// on the App Insights component, not here.
+//
+// Removing it from this file does not delete the live assignment, because
+// `azd provision` is incremental. It is deleted by hand:
+//   az role assignment delete --scope <storage id> \
+//     --role 'Monitoring Metrics Publisher' --assignee <function principalId>
 
 resource openAiUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: foundry

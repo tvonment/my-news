@@ -1,55 +1,73 @@
 # MyNews
 
-A private, single-user iOS news app. A crawler pulls ~35 feeds, an LLM filters them against my
-interests and writes English summaries, and the app shows a ranked feed that links to the original
-article. Like/dislike teaches it what to surface.
+An iOS news app on a small Azure backend, being rebuilt from a single-user tool into an invite-only
+app for many people. A crawler pulls 65 RSS feeds into Cosmos every half hour. v1 had an LLM filter
+them against one person's interests and write English summaries, and served a ranked feed that
+linked to the original article. v2 will classify and cluster each story once, for everyone, build
+each person's brief with plain arithmetic instead of per-user model calls, and still send every
+reader to the publisher.
 
-Hobby project. The binding constraint is **low running cost**: ~$8/month of Azure at the expected
-volume, against a $99/year Apple Developer Program membership that costs more than all of it.
+Hobby project. The binding constraint is **low running cost**, against a budget of **25 CHF a
+month**. Francs, not dollars: an Azure budget has no currency of its own and counts in the billing
+currency, which here is CHF, so the old `monthlyBudgetUsd = 25` was always 25 francs. The first
+estimate was ~$8/month. September 2026, v1's last full month, measured **11.08 CHF**, almost half of
+it SDK log noise. With v1 retired, harvest alone should cost roughly 1.5–3 CHF a month until v2
+(`docs/cost.md`).
 
 ## Status
 
-| Milestone | State |
-|---|---|
-| M0 — infra, health endpoint | **live** in Switzerland North |
-| M1 — harvest: fetch, dedupe, persist | **live** — 34 feeds, 1,348 articles on first run |
-| M2 — embeddings gate, scoring, summaries | **live** — first digest cost $0.09 |
-| M3 — iOS app v1 | **live** — runs in the simulator and builds signed for device |
-| M4 — feedback loop | **partial** — votes update the centroids. The weekly profile rewrite is written but had never run: `PROFILE_SCHEDULE` reached Bicep an hour after the last `azd provision` and was never deployed, so the timer failed to bind and `/api/profile` served the built-in default. Fixed 2026-08-03. |
-| M5 — in-app settings | not started |
-| M6 — digest + APNs push | not started |
-| M7 — MCP server, "dig deeper" agent | not started |
-
-Full design and the research behind it: `~/.claude/plans/i-have-an-idea-noble-galaxy.md`.
+**v1 was retired on 2026-10-21.** The AI digest, the weekly profile rewrite and every HTTP route but
+a static `GET /api/health` are gone; `harvest_timer` keeps filling Cosmos every half hour until v2's
+harvest replaces it. **v2 is in progress**: one shared backend for invited users, who sign in with
+Microsoft Entra External ID; content tiered by what each source permits; and a new, calmer iOS app
+built on Swiss design principles, with a finite brief three times a day instead of an endless ranked
+feed.
 
 ## Layout
 
 ```
-ios/            SwiftUI app (iOS 26). Feed, detail, settings; SwiftData offline cache.
-infra/          Bicep. Cosmos (free tier), Flex Consumption, Foundry, budget alerts.
-backend/        Python Azure Functions (v2 model).
+ios/            SwiftUI app, v1 (iOS 26): feed, detail, settings, SwiftData offline cache.
+                No backend since 2026-10-21; v2 replaces it.
+infra/          Bicep. Cosmos (free tier), Flex Consumption, Foundry (no model deployments
+                until v2), two budgets, alerts.
+backend/        Python Azure Functions (the Python v2 programming model, not MyNews v2).
   core/         config, cosmos, foundry, budget, models, sources
   fetch/        HTTP with conditional GET; parsing and canonicalization
-  pipeline/     harvest, gate, score, summarize, digest, profile
-  scripts/      probe_feeds.py, rescue_dump.py
+  pipeline/     harvest, the one stage still scheduled. gate, score, summarize, cluster,
+                digest and profile are v1 code no trigger reaches; v2 deletes them together
+                with the v1 harvest.
+  scripts/      probe_feeds.py, export_all.py, rescue_dump.py
   tests/        pytest, no network
+scripts/        whatif.sh + whatif_guard.py (the preprovision gate), postprovision.sh
+docs/           cost.md: what this actually costs, measured
 ```
 
 ## Getting started
 
 ```sh
-# 1. Dependencies
-cd backend && uv venv --python 3.12 .venv && uv pip install -r requirements.txt pytest
+# 1. Dependencies. requirements.txt is hash-locked, compiled from requirements.in
+#    (its header has the exact command). pytest stays out of it: the lock is what
+#    Azure installs, so it holds runtime dependencies only.
+cd backend && uv venv --python 3.12 .venv
+uv pip install -r requirements.txt
+uv pip install pytest
 
 # 2. Tests — no network, no Azure needed
-.venv/bin/python -m pytest tests/ -q
+.venv/bin/python -m pytest -q
 
 # 3. See what every configured feed actually does — no Azure needed
 .venv/bin/python scripts/probe_feeds.py
 .venv/bin/python scripts/probe_feeds.py heise verge      # or just a few
 
-# 4. Deploy (creates real Azure resources — read the warnings below first)
-cd .. && azd auth login && azd up
+# 4. Deploy (writes to real Azure — read the warnings below first)
+cd .. && azd auth login
+az login                      # as well: the what-if goes through az, which signs in apart
+azd env new mynews            # or `azd env select mynews`; the name is load-bearing, see below
+azd env set ALERT_EMAIL you@example.com
+azd env set BUDGET_START_DATE 2026-07-01
+azd env set GUARD_BUDGET_START_DATE 2026-10-01
+./scripts/whatif.sh           # read the diff before anything changes
+azd provision && azd deploy   # the preprovision hook runs whatif.sh again
 
 # 5. Rescue every point-readable document (see "The float16 outage" below)
 cd backend && .venv/bin/python scripts/rescue_dump.py
@@ -58,7 +76,83 @@ cd backend && .venv/bin/python scripts/rescue_dump.py
 `scripts/verify_vector_search.py` is superseded — the container no longer has a
 vector policy. See below.
 
+**The environment name is load-bearing.** Every resource name derives from
+`uniqueString(subscription, environmentName, location)`, so `mynews` in Switzerland North on the same
+subscription addresses the live stack. Any other name builds a second stack beside it, and its Cosmos
+account is refused the free tier: there is one per subscription.
+
+**The what-if guard runs before every provision.** `scripts/whatif.sh` runs
+`az deployment sub what-if` (`main.bicep` is subscription-scoped) and pipes the JSON into
+`scripts/whatif_guard.py`, which stops the provision before ARM touches anything when one of its
+rules blocks. Most rules guard a row of "Things that will cost you money" below; the rest guard data
+(backup mode, partition keys, the vector policy, any Delete). The float16 outage below is why:
+`azd provision` would have quietly re-applied the policy that broke the container. To make a blocked
+change on purpose, name the rules you accept, comma-separated, as the guard prints them:
+`WHATIF_ALLOW=<rule-id>,<rule-id> azd provision`.
+
+**Phase 0 switches the backup mode on its own, before provisioning.** Moving Cosmos from periodic to
+continuous backup is one-way, and it starts a migration during which the account may refuse the
+database, container and role-assignment writes that every provision repeats. So the switch is a
+single targeted account update, and the provision waits until it has finished:
+
+```sh
+az cosmosdb update -g <resource-group> -n <cosmos-account> \
+  --backup-policy-type Continuous --continuous-tier Continuous7Days
+az cosmosdb show -g <resource-group> -n <cosmos-account> --query backupPolicy.migrationState
+# repeat until status is Completed; then the provision sees no backup change and the guard passes
+azd provision && azd deploy
+```
+
+**The budget start dates are fixed, not computed.** `BUDGET_START_DATE` is the live budget's own
+start; the old template derived it from `utcNow()` and so tried to move it every month. A budget that
+does not exist yet needs the first of the current month, because the API accepts a past start date
+only within the current period: the guard's `2026-10-01` above is right only if the guard is created
+in October 2026.
+
+### Phase 0 manual cleanup
+
+`azd provision` deploys in incremental mode: a resource the template stops declaring is left in
+place, not deleted. Phase 0 removed three kinds of resource from the Bicep, so each has to be deleted
+by hand, once, after the provision that drops it:
+
+```sh
+# 1. The three v1 model deployments: once each for scorer, summarizer and embedding.
+az cognitiveservices account deployment delete -g <resource-group> -n <foundry-account> \
+  --deployment-name <deployment>
+
+# 2. The two queues nothing ever bound to: harvested-articles and harvested-articles-poison.
+az resource delete --ids <storage-account-id>/queueServices/default/queues/<queue>
+
+# 3. Monitoring Metrics Publisher on the storage account, where it granted nothing.
+az role assignment delete --assignee <function-principal-id> \
+  --role "Monitoring Metrics Publisher" --scope <storage-account-id>
+
+# 4. The host key v1 pasted into the phone (and into shell history). No route accepts it any
+#    more; regenerate it anyway, so it can never unlock a function-key route added later.
+#    Omitting --key-value generates a new value.
+az functionapp keys set -g <resource-group> -n <function-app> \
+  --key-type functionKeys --key-name default
+```
+
+`azd env get-values` has the resource group; `az resource list -g <resource-group> -o table` names
+everything in it; `az storage account show … --query id` and
+`az functionapp identity show … --query principalId` give the storage account's id and the
+Function's principal id.
+
+Then `az cognitiveservices account deployment list -g <resource-group> -n <foundry-account>` has to
+print `[]`. Until it does, the ~$280/day runaway ceiling those deployments' capacity allowed is still
+live for anything holding a token. Treat deleting `scorer` as one-way: whether gpt-5-nano can be
+deployed again is unclear (an old note says new customers lost it on 2026-08-07; Microsoft's schedule
+still lists it as GA until it retires on 2027-02-09), so do not count on rolling back to v1's scorer.
+The queues go through ARM rather than `az storage queue delete` because the account
+has shared-key access off and no person holds a queue data role on it.
+
 ## Running the iOS app
+
+**The v1 app no longer has a backend.** Its API — feed, feedback, profile, categories — was retired
+with v1 on 2026-10-21, so the app opens on whatever it had cached and every request it makes fails.
+v2 is a new app, not an update of this one. The build, signing and simulator notes below carry over;
+the URL and key lines point at routes that no longer exist.
 
 ```sh
 cd ios
@@ -69,7 +163,8 @@ xcrun simctl boot "iPhone 17 Pro"
 xcrun simctl install booted build/Debug-iphonesimulator/MyNews.app
 
 # Debug builds accept the backend config from the launch environment, so you
-# don't have to type a function key on a simulated keyboard.
+# don't have to type a function key on a simulated keyboard. (v1 only: the API
+# these point at was retired on 2026-10-21.)
 export SIMCTL_CHILD_MYNEWS_BASE_URL="https://<your-func>.azurewebsites.net"
 export SIMCTL_CHILD_MYNEWS_FUNCTION_KEY="$(az functionapp keys list -g rg-mynews-mynews \
   -n <your-func> --query functionKeys.default -o tsv)"
@@ -134,19 +229,29 @@ costs only the app icon.
 
 ## Things that will cost you money if changed
 
-These are load-bearing. Each one is the difference between ~$8/month and a lot more.
+These are load-bearing. Each one is the difference between a few francs a month and a lot more.
+Prices are Microsoft's USD list prices; the bill arrives in CHF. And this subscription, a Visual
+Studio credit, gets **no free grants** beyond the Cosmos free tier: Functions and Log Analytics bill
+from the first second and the first gigabyte.
 
 | Setting | Where | Why |
 |---|---|---|
 | `enableFreeTier: true` | `infra/modules/data.bicep` | **Settable only at account creation**, one per subscription. Gives 1,000 RU/s + 25 GB free, and makes TTL deletes free. Incompatible with serverless — which is why this is a provisioned account. |
 | Total Cosmos RU/s ≤ 1000 | `infra/modules/data.bicep` | The free grant is a hard budget. A second 400 RU/s container costs $23.36/month. |
-| No `alwaysReady` | `infra/modules/functions.bicep` | Always-ready instances have **no free grant**: $5.26/month at 512 MB. |
-| `instanceMemoryMB: 512` | `infra/modules/functions.bicep` | Flex bills provisioned memory for the whole execution *including* time blocked on LLM calls. This pipeline is ~95% network wait, so 2048 MB would cost 4x for identical wall-clock. |
-| `sku.name: 'GlobalStandard'` | `infra/modules/ai.bicep` | `ProvisionedManaged` is ~$1,460/month per PTU with a ~15 PTU minimum. |
-| `REASONING_EFFORT_*` | app settings | Every gpt-5.x model is a reasoning model and reasoning tokens bill at the **output** rate. Leaving the model default on a 55-token answer multiplies the output bill several-fold. The value is not portable: `minimal` for gpt-5-nano, `none` for gpt-5.4. |
+| No `alwaysReady` | `infra/modules/functions.bicep` | Always-ready instances bill around the clock, idle or not, and get no free grant on any subscription: $5.26/month at 512 MB. |
+| `instanceMemoryMB: 512` | `infra/modules/functions.bicep` | Flex bills provisioned memory for the whole execution *including* time blocked on the network: feed fetches now, model calls again in v2. This pipeline is ~95% network wait, so 2048 MB would cost 4x for identical wall-clock. |
+| `maximumInstanceCount: 5` | `infra/main.bicep` → `functions.bicep` | The runaway brake for everything that isn't a model call. With no free grant every execution bills, even a request the app rejects, so a flood costs in proportion to how far the app scales out: 5 instances at 512 MB, flat out, are 216,000 GB-s a day, a quarter of what the old cap of 20 allowed. v2's load test settles the final value, the smallest one that passes. |
+| `dailyQuotaGb: '0.2'` | `infra/modules/monitoring.bicep` | Log Analytics bills every gigabyte here, and September's 5.09 CHF, the largest line, was almost all Cosmos SDK header dumps. The logger levels in `function_app.py` are the fix; the cap bounds a relapse at ~6 GB a month. Past it, ingestion stops until the daily reset, so `pipeline-silent` fires within ~3 hours: a flood announces itself. A string because Bicep has no decimal type; `json()` turns it into 0.2. |
+| Foundry deployments: pay-per-token, capped `capacity` | `infra/modules/ai.bicep` | None until v2. The three v1 `GlobalStandard` deployments were removed in Phase 0 and deleted by hand (above), and with them a ~$280/day runaway ceiling: Azure OpenAI has no hard spend limit, and capacity is the most a loop can burn. v2 deploys Data Zone Standard (EU) for the chat models and regional Standard for embeddings, with a `@maxValue` on every capacity. Never `ProvisionedManaged`: ~$1,460/month per PTU with a ~15 PTU minimum, idle or not. |
+| `REASONING_EFFORT_*` | app settings, from v2 | Not deployed: the settings went with the v1 digest, and nothing calls a model until v2. When models return, every gpt-5.x model is a reasoning model and reasoning tokens bill at the **output** rate, so leaving the model default on a 55-token answer multiplies the output bill several-fold. The value is not portable: `minimal` works only on the original GPT-5 family, `none` only on gpt-5.1 and later. |
 
-Azure OpenAI has **no hard spend limit**. The brakes are the budget alert in Bicep and
-`DAILY_TOKEN_BUDGET_USD` in `core/budget.py`.
+Azure OpenAI has **no hard spend limit**. Until v2 the brake is structural: the Foundry account holds
+no deployments, so there is nothing to call. The out-of-band brakes are two budgets: **25 CHF** on
+the resource group (`monthlyBudget`: Actual 60 % and 90 %, Forecast 100 %), and a **130 CHF** guard
+on the whole subscription (`subscriptionGuardBudget`: Actual 80 %, Forecast 100 %), because the
+Visual Studio credit behind it is shared with other projects and suspends all of them, this one
+included, when it runs out. v2 adds fail-closed daily and monthly spend reservations in
+`core/budget.py`.
 
 ## The float16 outage
 
@@ -229,16 +334,33 @@ executions: harvest ran on schedule through the entire two-day outage and failed
 every single time, so counting runs alone would have stayed green throughout.
 Checked against the real window — 23 executions, 0 successful.
 
+*Postscript, 2026-10-21.* Two of the fixes above have since been revised. `/api/health` is static
+again — liveness only, no I/O — because an anonymous route that queries Cosmos spends free-tier RU on
+every unauthenticated hit, and it echoed deployment names and raw exception text to anyone who asked.
+Dependency health moved to signals only the operator sees: the successful-harvest alert above and,
+from v2, an admin health route. And the logger fix missed one: the Cosmos client dumps its HTTP
+traffic through its own `azure.cosmos._cosmos_http_logging_policy`, which sits beside the silenced
+logger rather than under it, and kept every request's headers flowing at INFO — 941k traces in 30
+days and the largest line on September's bill (`docs/cost.md`). Phase 0 silences the whole `azure`
+tree.
+
 ## Models
 
-Deployed: **`gpt-5-nano`** for bulk scoring ($0.05/$0.40 per 1M), **`gpt-5.4`** for summaries
-($2.50/$15.00), `text-embedding-3-small` at 512 dims for the gate.
+**None deployed since v1 was retired.** v1 ran three `GlobalStandard` deployments:
+**`gpt-5-nano`** for bulk scoring ($0.05/$0.40 per 1M), **`gpt-5.4`** for summaries ($2.50/$15.00)
+and `text-embedding-3-small` at 512 dims for the gate. Phase 0 deleted them along with the digest
+that called them (see "Phase 0 manual cleanup").
 
-The plan called for `gpt-5.6-luna`/`terra`, but this subscription has a quota limit of **0** for
-every gpt-5.6 variant in all ten regions checked — a subscription-level gap that needs a manual
-quota request, not something a region change fixes. `gpt-5.4` is priced identically to the planned
-`gpt-5.6-terra`, so only the scorer changed, and it got 20x cheaper. Switching back is four params
-in `infra/modules/ai.bicep`; the gpt-5.6 prices are already in `core/budget.py`.
+v1's plan called for `gpt-5.6-luna`/`terra`, but in July 2026 this subscription had a quota limit of
+**0** for every gpt-5.6 variant in all ten regions checked — a subscription-level gap that needs a
+manual quota request, not something a region change fixes. `gpt-5.4` is priced identically to the
+planned `gpt-5.6-terra`, so only the scorer changed, and it got 20x cheaper. Phase 0 deleted that
+scorer, and gpt-5-nano retires on 2027-02-09 in any case, so v2 does not plan on it.
+
+v2 deploys a classifier and a summarizer as Data Zone Standard (EU), so prompts are processed inside
+the EU data zone rather than wherever there is capacity, and embeddings as a regional Standard
+deployment, each with a capped capacity. Data Zone quota is pooled across the subscription and
+shared with its other projects, so check it before deploying.
 
 Note there is **no bare `gpt-5.6`** on Azure — luna/terra/sol are real model names, not size
 codenames. And reasoning effort is **not portable between models**: `minimal` works only on the
@@ -246,10 +368,10 @@ original GPT-5 family, `none` only on gpt-5.1 and later. The wrong value is reje
 which is why it lives in config beside the model id.
 
 Everything retires within ~12 months; Foundry runs OpenAI models on a 12-month GA lifecycle, so
-budget one model swap per ~9 months. Deployment names are config (`MODEL_SCORER`,
-`MODEL_SUMMARIZER`) and the JSON schemas are the stable contract across a swap.
+budget one model swap per ~9 months. Deployment names are config, not constants, and the JSON
+schemas are the stable contract across a swap.
 
-See `docs/cost.md` for measured costs from the first live run.
+See `docs/cost.md` for the measured September bill and the first live run.
 
 ## Feed fetching
 
@@ -266,10 +388,26 @@ since May 2025.
 
 ## Conventions
 
-- Never send a User-Agent resembling `ClaudeBot`, `GPTBot`, `anthropic-ai`, `CCBot` or
-  `PerplexityBot`. derStandard, Spiegel, ORF, Zeit and FAZ `Disallow` those **by name** while
-  leaving `User-agent: *` open. An honestly-named reader is welcome; an AI-sounding one is blocked.
-- Paywalls: detect and skip, never bypass.
-- Always link to the original article.
-- Keep this app off the App Store. Personal use is what makes the EU press-publishers' right and
-  the private-copying exception apply; publishing voids both.
+- **Invite-only TestFlight first, the App Store (Switzerland storefront) later.** v1 stayed off the
+  App Store because personal use is what made the EU press-publishers' right and the private-copying
+  exception apply. Serving other people voids both, so v2 justifies what it shows source by source
+  instead.
+- **Content is tiered by each source's permission**, enforced in code. Tier A, written permission or
+  a published allowance: the model may read the full text. Tier B, no reservation found: the model
+  reads the headline and the publisher's own feed description. Tier C, an explicit AI/TDM
+  reservation: the model reads the title only. B and C display the same: the headline and that
+  description, capped, verbatim.
+- **AI summaries only where the publisher allows it** (Tier A), labelled as AI-written and
+  translated only where the permission covers translation. Everything else shows the publisher's
+  own headline and teaser, and publisher text is never machine-translated.
+- **Always link to the original article.** Every story, every tier.
+- **Paywalls: detect, label and respect.** Never bypass.
+- **Identify honestly.** From v2 the crawler is a named bot with a contact page,
+  `MyNewsBot/2.0 (+https://tvonment.github.io/my-news/bot/)`, and it checks robots.txt and TDM
+  reservations (Content-Signal, TDMRep) before fetching anything beyond the feed. Never choose a
+  User-Agent to get around AI-bot rules: derStandard, Spiegel, ORF, Zeit and FAZ `Disallow`
+  `ClaudeBot`, `GPTBot`, `anthropic-ai`, `CCBot` and `PerplexityBot` **by name** while leaving
+  `User-agent: *` open, and that is a publisher saying no to AI use, not a filter to slip past. v1
+  got this wrong: its UA was chosen not to match those rules. The v1 harvest that runs until v2
+  still sends it, still backfills thin leads from article pages without checking robots.txt, and
+  still carries a Safari UA override for developer.apple.com; v2's harvest drops all three.

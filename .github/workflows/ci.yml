@@ -1,0 +1,69 @@
+# Tests the backend and compiles the Bicep on every pull request and every
+# push to main. Nothing here touches Azure or reads a secret: the repo is
+# public, and a pull request from a fork gets neither anyway. So the token is
+# read-only and no step can provision. What a provision would change is
+# checked locally, by scripts/whatif.sh, where the credentials are.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # No step pushes, so the token isn't left in .git/config for the
+          # pull request's own code (the tests) to find.
+          persist-credentials: false
+
+      # setup-uv stopped publishing major tags at v8: a tag that can be moved
+      # is how the tj-actions compromise spread. So this pins an immutable
+      # release instead of the major version, and moving to the next one is a
+      # deliberate edit.
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Create the Python 3.12 venv
+        run: uv venv --python 3.12 backend/.venv
+
+      # The lock is resolved for Flex Consumption's Linux x86-64 workers, which
+      # is what this runner is. --require-hashes fails the job on any file that
+      # differs from the one locked, the same check the deploy relies on.
+      # backend/requirements.in says how to re-lock.
+      - name: Install the locked dependencies (hash-checked)
+        run: uv pip install --python backend/.venv/bin/python --require-hashes -r backend/requirements.txt
+
+      # pytest never ships, so it isn't in the lock: installed on its own,
+      # pinned to the version the suite was last run with.
+      - name: Install pytest
+        run: uv pip install --python backend/.venv/bin/python pytest==9.1.1
+
+      - name: pytest
+        working-directory: backend
+        run: .venv/bin/python -m pytest -q
+
+  bicep:
+    name: bicep build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # az is preinstalled on ubuntu runners, the Bicep CLI is not. Compiling
+      # needs no sign-in: it only proves the templates build, which is the
+      # part of a provision that can fail before Azure is asked anything.
+      - name: Install Bicep
+        run: az bicep install
+
+      - name: Compile infra/main.bicep
+        run: az bicep build --file infra/main.bicep

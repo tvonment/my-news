@@ -171,6 +171,10 @@ class TestNullClusterIdTrap:
     `NOT IS_DEFINED(c.cluster_id)` clause was false for every *unclustered*
     article and the feed collapsed from ~400 items to the 22 cluster primaries.
     Nothing errored; the feed just went quiet.
+
+    The feed query that also tolerated legacy nulls was retired with the v1
+    routes on 2026-10-21. The write side stays guarded: harvest still writes
+    these documents, and any later query on `cluster_id` meets the same trap.
     """
 
     def test_unclustered_article_omits_the_key_entirely(self) -> None:
@@ -185,15 +189,3 @@ class TestNullClusterIdTrap:
         a = Article(id="a", pk="art|2026-07-28")
         a.cluster_id = "primary-id"
         assert a.to_doc()["cluster_id"] == "primary-id"
-
-    def test_feed_query_also_tolerates_legacy_nulls(self) -> None:
-        # Documents written before the fix still carry the null, so the query
-        # must handle both shapes rather than relying on the write side alone.
-        import function_app
-
-        source = function_app.feed.__doc__ or ""
-        assert source is not None
-        import inspect
-
-        code = inspect.getsource(function_app)
-        assert "IS_NULL(c.cluster_id)" in code

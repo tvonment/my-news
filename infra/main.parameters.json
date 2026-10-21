@@ -13,6 +13,12 @@
     },
     "alertEmail": {
       "value": "${ALERT_EMAIL}"
+    },
+    "budgetStartDate": {
+      "value": "${BUDGET_START_DATE}"
+    },
+    "guardBudgetStartDate": {
+      "value": "${GUARD_BUDGET_START_DATE}"
     }
   }
 }

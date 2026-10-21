@@ -7,6 +7,13 @@ param resourceToken string
 @maxValue(1000)
 param containerThroughput int = 1000
 
+@description('Cosmos backup mode. Continuous7Days is free and restores, self-service, to any second of the last 7 days. Moving an account from Periodic to Continuous is ONE-WAY: Azure has no way back, so Periodic only describes an account that has not been switched yet.')
+@allowed([
+  'Continuous7Days'
+  'Periodic'
+])
+param cosmosBackup string = 'Continuous7Days'
+
 var cosmosAccountName = 'cosmos-mynews-${resourceToken}'
 var databaseName = 'mynews'
 var containerName = 'items'
@@ -40,6 +47,11 @@ resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
     consistencyPolicy: {
       defaultConsistencyLevel: 'Session'
     }
+    // Pinned to the live value. Azure turned it on at creation although this
+    // template never asked, so leaving it unset makes every what-if report a
+    // difference, the kind of standing noise that hides a real change. With a
+    // single region there is nothing to fail over to; the value changes nothing.
+    enableAutomaticFailover: true
     locations: [
       {
         locationName: location
@@ -52,7 +64,29 @@ resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
         name: 'EnableNoSQLVectorSearch'
       }
     ]
-    backupPolicy: {
+    // Continuous backup, 7-day tier, because from Phase 1 this account holds
+    // other people's data: their accounts, saves and history, not just one
+    // owner's reading list. Periodic mode kept two daily copies, so a restore
+    // could lose up to a day and needed a support ticket. Continuous mode
+    // restores self-service to any second of the last 7 days (point-in-time
+    // restore), so a bad migration or a buggy purge can be undone to the moment
+    // before it ran. The 7-day tier costs nothing.
+    //
+    // The switch is ONE-WAY: once the account is Continuous, Azure will not move
+    // it back, and setting `cosmosBackup` to 'Periodic' afterwards fails the
+    // deployment. Continuous mode also means data a user deletes stays
+    // restorable for up to 7 days, which the privacy policy has to say.
+    //
+    // The migration runs in the background after the provision that starts it,
+    // and Azure refuses account-level updates until it finishes: wait for
+    // `az cosmosdb show ... --query backupPolicy.migrationState` to report
+    // Completed before provisioning again.
+    backupPolicy: cosmosBackup == 'Continuous7Days' ? {
+      type: 'Continuous'
+      continuousModeProperties: {
+        tier: 'Continuous7Days'
+      }
+    } : {
       type: 'Periodic'
       periodicModeProperties: {
         // First 2 copies are free.
@@ -175,20 +209,18 @@ resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/con
   }
 }
 
-resource queueServices 'Microsoft.Storage/storageAccounts/queueServices@2023-05-01' = {
-  parent: storage
-  name: 'default'
-}
-
-resource harvestQueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2023-05-01' = {
-  parent: queueServices
-  name: 'harvested-articles'
-}
-
-resource harvestPoison 'Microsoft.Storage/storageAccounts/queueServices/queues@2023-05-01' = {
-  parent: queueServices
-  name: 'harvested-articles-poison'
-}
+// No queues. `harvested-articles` and its poison queue came with the scaffold
+// and were never used: no function ever bound to either, because harvest and
+// digest ended up as two timers instead. Phase 1 adds the queues v2 actually
+// uses (account-purge, suggestions, ops-jobs).
+//
+// Removing them here does NOT delete them, because `azd provision` is
+// incremental. They are deleted by hand, through ARM: `az storage queue
+// delete --auth-mode login` needs a queue data role no human holds here, and
+// shared-key access is off.
+//   az resource delete --ids \
+//     <storage id>/queueServices/default/queues/harvested-articles \
+//     <storage id>/queueServices/default/queues/harvested-articles-poison
 
 output cosmosAccountName string = cosmos.name
 output cosmosEndpoint string = cosmos.properties.documentEndpoint
@@ -196,4 +228,3 @@ output cosmosDatabaseName string = databaseName
 output cosmosContainerName string = containerName
 output storageAccountName string = storage.name
 output deploymentContainerName string = deploymentContainerName
-output harvestQueueName string = harvestQueue.name

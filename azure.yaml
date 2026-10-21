@@ -10,6 +10,22 @@ services:
     host: function
 
 hooks:
+  # Every provision (`azd provision`, `azd up`) first runs a what-if and lets
+  # scripts/whatif_guard.py refuse changes that cost money or lose data:
+  # deletes, the Cosmos free tier, regions, capabilities, backup, partition
+  # key, vector policy and RU/s total, Foundry SKUs, always-ready instances
+  # and the Flex plan. A blocked change you do want is accepted by naming its
+  # rule, for that run only:
+  #   WHATIF_ALLOW=<rule>[,<rule>] azd provision
+  # Phase 0's one-way switch to continuous backup is the first such run:
+  #   WHATIF_ALLOW=cosmos-backup azd provision
+  # Needs `az login` as well as `azd auth login`; the what-if runs through az.
+  preprovision:
+    posix:
+      shell: sh
+      continueOnError: false
+      interactive: false
+      run: ./scripts/whatif.sh
   postprovision:
     posix:
       shell: sh

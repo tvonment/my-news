@@ -1,37 +1,74 @@
 """MyNews Azure Functions app (Python v2 programming model).
 
-Two timers by design:
+v1 was retired on 2026-10-21. The digest and profile timers are gone, and so is
+every HTTP route except ``health``: feed, feedback, profile, categories, runs,
+refresh and digest. Nothing left in this app calls a model. Two functions
+remain:
 
 * ``harvest_timer`` — every 30-60 min. Fetch, dedupe, store. No LLM, ~$0.
   Frequent because several feeds carry only 10 items and would otherwise roll
-  over between runs.
-* ``digest_timer`` — 3x/day. Embed, score, summarize, push. All the cost lives
-  here. Schedules are UTC: Flex Consumption does not support WEBSITE_TIME_ZONE.
+  over between runs. It keeps running until v2 replaces it: per the v2 plan,
+  the v1 harvest is deleted in the same release that ships harvest v2
+  (Phase 2), and until then the ``pipeline-silent`` alert keeps watching it.
+* ``health`` — anonymous, static, no I/O. Its docstring says why it stopped
+  probing Cosmos.
+
+The v1 stages under ``pipeline/`` and ``core/`` (gate, score, summarize,
+cluster, digest, profile) are no longer reachable from here but stay in place;
+Phase 2 deletes them together with the v1 harvest. Phase 1 splits this file into
+``api/*`` blueprints and ``jobs/*``.
+
+Schedules are UTC: Flex Consumption does not support WEBSITE_TIME_ZONE.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 import azure.functions as func
 
-from core import cosmos
-from core.config import get_settings
-from core.models import USER_PK, RUN_PK, iso, utcnow
+from core.models import iso, utcnow
 
 app = func.FunctionApp()
 log = logging.getLogger(__name__)
 
-# The Azure SDK logs every HTTP request and response at Information level. One
-# harvest that creates 112 documents emits over 2,000 trace lines, which blows
-# straight through host.json's 5-items/second sampling cap and takes the lines
-# that matter with it — the "Harvest complete" summary was being dropped from
-# exactly the runs that did the most work. Errors still surface: they travel as
-# exceptions, which sampling excludes.
-logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
-logging.getLogger("azure.identity").setLevel(logging.WARNING)
+# Third-party loggers that speak at INFO on every request. The Functions worker
+# forwards whatever the root logger lets through, and one busy harvest's worth
+# of request lines blows straight through host.json's 5-items/second sampling
+# cap and takes the lines that matter with it — the "Harvest complete" summary
+# was being dropped from exactly the runs that did the most work. Errors still
+# surface: they travel as exceptions, which sampling excludes.
+#
+# The previous version of this block silenced azure-core's HTTP logger and
+# azure.identity, and missed the one that cost money. The Cosmos client does not
+# log through azure-core's logger: its pipeline carries CosmosHttpLoggingPolicy,
+# which runs azure-core's request/response dump (URL, method, every header,
+# status, every response header) under its own name,
+# `azure.cosmos._cosmos_http_logging_policy` — a sibling of the logger that was
+# silenced, not a child of it. Every Cosmos call kept dumping at INFO: 941k
+# traces and ~1.8 GB of ingestion in 30 days, almost all of September's
+# CHF 5.09 Log Analytics line.
+#
+# `azure` quiets the whole SDK, including loggers nobody has met yet. The two
+# HTTP policies are also pinned by name so that lowering `azure` to debug
+# something else cannot reopen the expensive pair. httpx logs one INFO line per
+# fetch; httpcore speaks only at DEBUG. trafilatura warns on routine extraction
+# misses that harvest already treats as non-errors (the article keeps the
+# feed's own lead), hence ERROR. test_logging_config.py holds these levels.
+_QUIET_LOGGERS = {
+    "azure": logging.WARNING,
+    "azure.cosmos._cosmos_http_logging_policy": logging.WARNING,
+    "azure.core.pipeline.policies.http_logging_policy": logging.WARNING,
+    "azure.identity": logging.WARNING,
+    "httpx": logging.WARNING,
+    "httpcore": logging.WARNING,
+    "trafilatura": logging.ERROR,
+}
+for _name, _level in _QUIET_LOGGERS.items():
+    logging.getLogger(_name).setLevel(_level)
 
 
 def _json(payload: dict[str, Any], status: int = 200) -> func.HttpResponse:
@@ -45,46 +82,54 @@ def _json(payload: dict[str, Any], status: int = 200) -> func.HttpResponse:
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
+# Version of the HTTP contract this backend serves; docs/api.md (Phase 1)
+# defines it.
+API_VERSION = 1
+
+
+def _min_supported_build() -> int:
+    """The oldest iOS build the backend still serves; 0 means every build.
+
+    Unset until Phase 1's settings manifest adds MIN_SUPPORTED_BUILD. A value
+    that is not an integer degrades to 0 with a warning instead of failing the
+    request: a typo in an app setting must not turn the one public route into a
+    500, and an unparsable floor cannot be enforced anyway.
+    """
+    raw = os.environ.get("MIN_SUPPORTED_BUILD", "").strip()
+    if not raw:
+        return 0
+    try:
+        return int(raw)
+    except ValueError:
+        log.warning("MIN_SUPPORTED_BUILD=%r is not an integer; serving minBuild=0", raw)
+        return 0
+
+
 @app.route(route="health", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
 def health(req: func.HttpRequest) -> func.HttpResponse:
-    """Liveness plus a real dependency check.
+    """Static liveness: the host is up, and which contract it speaks. No I/O.
 
-    Anonymous on purpose so it can be probed without a key — it returns no data,
-    only whether configuration and Cosmos are reachable.
+    This used to read and query Cosmos, because during the 2026-08-02 outage a
+    point-read-only check answered "healthy" on 3 of 8 probes with the whole
+    app down. That made the check honest but put the wrong thing on an
+    *anonymous* route: every unauthenticated hit spent ~3-4 RU of the free
+    tier's 1,000 RU/s that harvest shares, and the response carried the model
+    deployment names and, on failure, the raw exception text, to anyone who
+    asked.
+
+    Dependency health now lives where only the operator can trigger it: the
+    ``pipeline-silent`` alert on successful harvest runs, and from Phase 1 the
+    admin health route. This endpoint touches no settings object, no Cosmos and
+    no network, so it has nothing to fail on and nothing to echo.
     """
-    checks: dict[str, Any] = {}
-    healthy = True
-
-    try:
-        settings = get_settings()
-        checks["config"] = "ok"
-        checks["models"] = {
-            "scorer": settings.model_scorer,
-            "summarizer": settings.model_summarizer,
-            "embedding": settings.model_embedding,
+    return _json(
+        {
+            "status": "ok",
+            "api": API_VERSION,
+            "minBuild": _min_supported_build(),
+            "time": iso(utcnow()),
         }
-    except Exception as exc:
-        healthy = False
-        checks["config"] = f"error: {exc}"
-        return _json({"status": "unhealthy", "checks": checks}, status=503)
-
-    try:
-        # Point read of a document that may not exist: ~1 RU, proves both the
-        # managed-identity token and the data-plane role assignment work.
-        cosmos.read("settings", USER_PK)
-        # And a query, because a point read alone is not a health check. During
-        # the 2026-08-02 outage every query on this container returned
-        # InternalServerError while point reads kept mostly working, so this
-        # endpoint answered "healthy" on 3 of 8 probes with the whole app down.
-        # Single-partition and counting only, so it stays ~2-3 RU.
-        cosmos.query("SELECT VALUE COUNT(1) FROM c", partition_key=USER_PK)
-        checks["cosmos"] = "ok"
-    except Exception as exc:
-        healthy = False
-        checks["cosmos"] = f"error: {exc}"
-
-    return _json({"status": "healthy" if healthy else "unhealthy", "checks": checks},
-                 status=200 if healthy else 503)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -103,353 +148,3 @@ def harvest_timer(timer: func.TimerRequest) -> None:
         log.warning("Harvest timer is past due")
     record = run_harvest()
     log.info("Harvest run %s: %d new items", record.id, record.items_new)
-
-
-@app.route(route="refresh", methods=["POST"], auth_level=func.AuthLevel.FUNCTION)
-def refresh(req: func.HttpRequest) -> func.HttpResponse:
-    """Trigger a harvest on demand.
-
-    Returns a summary rather than enqueuing, because a harvest of the seed list
-    finishes well inside the 230-second HTTP ceiling. The digest pipeline will
-    not — that stays on its timer.
-    """
-    from pipeline.harvest import run_harvest
-
-    source_id = req.params.get("source")
-    try:
-        record = run_harvest(only_source=source_id)
-    except Exception as exc:
-        log.exception("Manual refresh failed")
-        return _json({"error": str(exc)}, status=500)
-
-    return _json(
-        {
-            "run": record.id,
-            "feeds_polled": record.feeds_polled,
-            "feeds_unchanged": record.feeds_unchanged,
-            "feeds_failed": record.feeds_failed,
-            "items_seen": record.items_seen,
-            "items_new": record.items_new,
-            "ok": record.ok,
-        }
-    )
-
-
-# ---------------------------------------------------------------------------
-# Digest — gate, score, summarize. All model spend happens here.
-# ---------------------------------------------------------------------------
-@app.timer_trigger(
-    schedule="%DIGEST_SCHEDULE%",
-    arg_name="timer",
-    run_on_startup=False,
-    use_monitor=True,
-)
-def digest_timer(timer: func.TimerRequest) -> None:
-    from pipeline.digest import run_digest
-
-    if timer.past_due:
-        log.warning("Digest timer is past due")
-    record = run_digest()
-    log.info("Digest run %s cost $%.4f", record.id, record.estimated_usd)
-
-
-@app.route(route="digest", methods=["POST"], auth_level=func.AuthLevel.FUNCTION)
-def digest(req: func.HttpRequest) -> func.HttpResponse:
-    """Run a digest on demand.
-
-    Note the 230-second platform ceiling on HTTP responses: a large backlog will
-    outlast it. The run continues server-side, and `GET /api/runs` shows the
-    result — but for routine use, let the timer do it.
-    """
-    from pipeline.digest import run_digest
-
-    try:
-        record = run_digest()
-    except Exception as exc:
-        log.exception("Manual digest failed")
-        return _json({"error": str(exc)}, status=500)
-
-    return _json(
-        {
-            "run": record.id,
-            "gated": record.items_gated,
-            "scored": record.items_scored,
-            "summarized": record.items_summarized,
-            "estimated_usd": record.estimated_usd,
-            "budget_exhausted": record.budget_exhausted,
-            "ok": record.ok,
-            "error": record.error,
-        }
-    )
-
-
-# ---------------------------------------------------------------------------
-# Taste profile — the slow, legible half of the learning loop
-# ---------------------------------------------------------------------------
-@app.timer_trigger(
-    schedule="%PROFILE_SCHEDULE%",
-    arg_name="timer",
-    run_on_startup=False,
-    use_monitor=True,
-)
-def profile_timer(timer: func.TimerRequest) -> None:
-    from pipeline.profile import rewrite_profile
-
-    result = rewrite_profile()
-    if result.rewritten:
-        log.info("Profile now at v%d: %s", result.version, result.changelog)
-    else:
-        log.info("Profile unchanged: %s", result.reason)
-
-
-@app.route(route="profile", methods=["GET"], auth_level=func.AuthLevel.FUNCTION)
-def get_profile(req: func.HttpRequest) -> func.HttpResponse:
-    """What the filter currently believes about you, and how it got there."""
-    from pipeline.profile import load_profile_doc
-
-    doc = load_profile_doc()
-    return _json(
-        {
-            "text": doc.get("text", ""),
-            "version": doc.get("version", 0),
-            "changelog": doc.get("changelog", ""),
-            "source": doc.get("source", "default"),
-            "updatedAt": doc.get("updated_at"),
-            "history": doc.get("history", []),
-        }
-    )
-
-
-@app.route(route="profile", methods=["PUT"], auth_level=func.AuthLevel.FUNCTION)
-def put_profile(req: func.HttpRequest) -> func.HttpResponse:
-    """Hand-edit the profile.
-
-    A manual edit is versioned like any other and is used verbatim by the next
-    scoring run — this is the steering wheel for when the automatic rewrite
-    drifts somewhere you don't want.
-    """
-    from pipeline.profile import save_profile
-
-    try:
-        body = req.get_json()
-    except ValueError:
-        return _json({"error": "body must be JSON"}, status=400)
-
-    text = (body.get("text") or "").strip()
-    if len(text) < 100:
-        return _json({"error": "profile text must be at least 100 characters"}, status=400)
-
-    version = save_profile(text, body.get("changelog") or "Edited by hand.", source="manual")
-    return _json({"ok": True, "version": version})
-
-
-@app.route(route="profile/rewrite", methods=["POST"], auth_level=func.AuthLevel.FUNCTION)
-def rewrite_profile_now(req: func.HttpRequest) -> func.HttpResponse:
-    """Trigger the rewrite on demand rather than waiting for the weekly timer."""
-    from pipeline.profile import rewrite_profile
-
-    result = rewrite_profile()
-    return _json(
-        {
-            "rewritten": result.rewritten,
-            "reason": result.reason,
-            "version": result.version,
-            "changelog": result.changelog,
-            "estimated_usd": round(result.cost_usd, 6),
-        }
-    )
-
-
-# ---------------------------------------------------------------------------
-# Feedback
-# ---------------------------------------------------------------------------
-@app.route(route="feedback", methods=["POST"], auth_level=func.AuthLevel.FUNCTION)
-def feedback(req: func.HttpRequest) -> func.HttpResponse:
-    """Record a vote and fold it into the centroids immediately.
-
-    The centroid update is what makes a vote take effect on the very next run
-    without any LLM involvement. The weekly profile rewrite is the slow, legible
-    half of the loop; this is the fast, numeric half.
-    """
-    from pipeline.gate import update_centroid
-
-    try:
-        body = req.get_json()
-    except ValueError:
-        return _json({"error": "body must be JSON"}, status=400)
-
-    article_id = body.get("articleId")
-    signal = body.get("signal")
-    if not article_id or signal not in ("like", "dislike", "open"):
-        return _json({"error": "articleId and signal (like|dislike|open) are required"}, status=400)
-
-    article = None
-    for row in cosmos.query(
-        "SELECT * FROM c WHERE c.type = 'article' AND c.id = @id OFFSET 0 LIMIT 1",
-        [{"name": "@id", "value": article_id}],
-    ):
-        article = row
-        break
-
-    if article is None:
-        return _json({"error": "unknown articleId"}, status=404)
-
-    # `iso()` rather than a bare `isoformat()`: the latter ends in "+00:00", and
-    # `core/models.py` exists to keep "+" out of document ids because Cosmos hits
-    # known SDK bugs on them. Seconds precision is enough — the id also carries
-    # the article, so the only thing it collapses is a double-tap on one card.
-    now = iso(utcnow())
-    cosmos.upsert(
-        {
-            "id": f"evt_{now}_{article_id}",
-            "pk": USER_PK,
-            "type": "feedback",
-            "article_id": article_id,
-            "signal": signal,
-            "dwell_ms": int(body.get("dwellMs", 0) or 0),
-            "title": article.get("title"),
-            "categories": article.get("categories", []),
-            "why": article.get("why"),
-            "created_at": now,
-            "ttl": 60 * 60 * 24 * 400,
-        }
-    )
-
-    embedding = article.get("embedding")
-    if signal in ("like", "dislike") and embedding:
-        update_centroid(signal, embedding)
-        # A liked article is worth keeping past the 21-day TTL.
-        if signal == "like":
-            article["ttl"] = -1
-            cosmos.upsert(article)
-
-    return _json({"ok": True, "articleId": article_id, "signal": signal})
-
-
-# ---------------------------------------------------------------------------
-# Feed
-# ---------------------------------------------------------------------------
-@app.route(route="feed", methods=["GET"], auth_level=func.AuthLevel.FUNCTION)
-def feed(req: func.HttpRequest) -> func.HttpResponse:
-    """Ranked feed for the app.
-
-    Ordered by relevance, not recency — the whole point of the pipeline is that
-    what matters most rises, and the recency preference is already folded into
-    the gate score. Only items the scorer has judged are returned; anything still
-    `harvested` or `gated` is invisible until the next digest run rates it.
-    """
-    try:
-        limit = min(int(req.params.get("limit", "60")), 200)
-        min_relevance = int(req.params.get("min_relevance", "0"))
-    except ValueError:
-        return _json({"error": "limit and min_relevance must be integers"}, status=400)
-
-    category = req.params.get("category")
-    since = req.params.get("since")
-
-    # Collapsed cluster members are excluded: only the primary of each story is
-    # shown. They keep their own record and stay searchable — they just don't
-    # occupy a card repeating what the primary already says.
-    sql = (
-        "SELECT * FROM c WHERE c.type = 'article' AND IS_DEFINED(c.relevance) "
-        "AND c.relevance >= @min_relevance "
-        "AND (NOT IS_DEFINED(c.cluster_id) OR IS_NULL(c.cluster_id) OR c.cluster_id = c.id)"
-    )
-    parameters: list[dict[str, Any]] = [{"name": "@min_relevance", "value": min_relevance}]
-    if category:
-        sql += " AND ARRAY_CONTAINS(c.categories, @category)"
-        parameters.append({"name": "@category", "value": category})
-    if since:
-        sql += " AND c.published_at >= @since"
-        parameters.append({"name": "@since", "value": since})
-    sql += " ORDER BY c.relevance DESC OFFSET 0 LIMIT @limit"
-    parameters.append({"name": "@limit", "value": limit})
-
-    try:
-        items = cosmos.query(sql, parameters, max_items=limit)
-        # Shaping stays inside the `try`: `_feed_item` subscripts `item["id"]`,
-        # so a malformed document would otherwise escape as a bare 500 past the
-        # handler written to prevent exactly that.
-        payload = [_feed_item(i) for i in items]
-    except Exception as exc:
-        log.exception("Feed query failed")
-        return _json({"error": str(exc)}, status=500)
-
-    return _json({"count": len(payload), "items": payload})
-
-
-def _feed_item(item: dict[str, Any]) -> dict[str, Any]:
-    """Shape one article for the client.
-
-    Deliberately omits `embedding` — 512 floats per article would dominate the
-    payload and the client has no use for it.
-    """
-    return {
-        "id": item["id"],
-        "title": item.get("title"),
-        "source": item.get("source_name"),
-        "url": item.get("url"),
-        "publishedAt": item.get("published_at"),
-        "lead": (item.get("lead") or "")[:400],
-        "relevance": item.get("relevance"),
-        "why": item.get("why"),
-        "categories": item.get("categories", []),
-        "summary": item.get("summary", []),
-        "entities": item.get("entities", []),
-        "readingMinutes": item.get("reading_minutes"),
-        "paywalled": item.get("paywalled", False),
-        "satire": item.get("satire", False),
-        "alsoReportedBy": item.get("also_reported_by", []),
-        "clusterSize": item.get("cluster_size", 1),
-        "state": item.get("state"),
-    }
-
-
-@app.route(route="categories", methods=["GET"], auth_level=func.AuthLevel.FUNCTION)
-def categories(req: func.HttpRequest) -> func.HttpResponse:
-    """The fixed taxonomy plus how many unread-ish items sit in each bucket.
-
-    Served from the backend rather than hardcoded in the app so the two can
-    never disagree about what the categories are.
-    """
-    from core.taxonomy import CATEGORIES, CATEGORY_LABELS, COUNTS_DOC_ID
-
-    # A point read of counts written by the last digest, not a scan.
-    #
-    # This used to query every scored article in the container and tally them in
-    # Python — no LIMIT, no max_items, materialised by `cosmos.query`'s `list()`
-    # — which measured at ~168 RU and ~4,200 rows, on every app foreground, and
-    # grew with the archive. Counting only when scoring changes them turns that
-    # into ~1 RU flat.
-    #
-    # Before the first digest the document does not exist yet and every bucket
-    # reports zero. The labels are what the app renders the chips from; it counts
-    # the articles it actually loaded rather than trusting these numbers.
-    stored = cosmos.read(COUNTS_DOC_ID, USER_PK) or {}
-    counts: dict[str, int] = stored.get("counts", {})
-
-    return _json(
-        {
-            "categories": [
-                {"id": name, "label": CATEGORY_LABELS[name], "count": counts.get(name, 0)}
-                for name in CATEGORIES
-            ]
-        }
-    )
-
-
-# ---------------------------------------------------------------------------
-# Runs (operational visibility)
-# ---------------------------------------------------------------------------
-@app.route(route="runs", methods=["GET"], auth_level=func.AuthLevel.FUNCTION)
-def runs(req: func.HttpRequest) -> func.HttpResponse:
-    """Recent pipeline runs with their real token spend.
-
-    This is what keeps the cost model honest: every run records what it actually
-    consumed, so docs/cost.md can be reconciled against reality.
-    """
-    items = cosmos.query(
-        "SELECT * FROM c WHERE c.type = 'run' ORDER BY c.started_at DESC OFFSET 0 LIMIT 20",
-        partition_key=RUN_PK,
-    )
-    return _json({"count": len(items), "runs": items})

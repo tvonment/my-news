@@ -1,0 +1,48 @@
+# Direct dependencies, with floors. requirements.txt is the lock generated from
+# this file and is what the deploy installs; never edit it by hand. Re-lock with:
+#
+#   cd backend && uv pip compile requirements.in --python-version 3.12 \
+#     --python-platform x86_64-manylinux_2_28 \
+#     --exclude-newer 2026-08-03T09:14:00Z --generate-hashes -o requirements.txt
+#
+# --python-platform resolves for Flex Consumption's Linux x86-64 workers rather
+# than for the machine running the command. --exclude-newer is the instant the
+# last v1 deploy finished, when its build resolved these same floors unpinned,
+# so the lock reproduces as closely as can now be known what the live app has
+# run since, and the command gives the same answer on any later day.
+# --generate-hashes puts pip in hash-checking mode: a file that differs from the
+# one locked fails the install instead of shipping.
+#
+# Moving that date, or adding a package, is a deliberate re-lock and never a
+# side effect. Phase 1 makes the first one, adding pyjwt 2.15.1 and msal through
+# per-package --exclude-newer-package overrides, and runs the tests on it.
+#
+# pytest is not listed because it never ships; install it into the venv
+# separately.
+
+# Azure Functions Python v2 programming model.
+# >=1.24.0 is the floor for the GA MCP extension (planned for M7).
+azure-functions>=1.24.0
+
+# Data + identity. Cosmos data-plane auth is RBAC-only (disableLocalAuth), so
+# DefaultAzureCredential is the only way in — there is no key to fall back to.
+azure-cosmos>=4.9.0
+azure-identity>=1.19.0
+
+# Foundry / Azure OpenAI.
+openai>=1.60.0
+
+# Fetching. http2 extra pulls in `h2`, which APNs requires — a silent HTTP/1.1
+# fallback is rejected outright by Apple.
+httpx[http2]>=0.28.0
+feedparser>=6.0.11
+
+# Article extraction. Pin >=1.8.0: earlier releases were GPLv3+, 2.x is Apache-2.0.
+trafilatura>=2.1.0
+
+# Config + vector math.
+PyYAML>=6.0.2
+numpy>=2.1.0
+
+# APNs JWT signing (ES256) for M6.
+pyjwt[crypto]>=2.10.0
