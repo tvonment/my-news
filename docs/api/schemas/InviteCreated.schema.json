@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/InviteCreated.schema.json",
+  "title": "InviteCreated",
+  "description": "POST /admin/invites, 201. The only response that ever contains plaintext codes; never logged.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "invites"
+  ],
+  "properties": {
+    "invites": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "label",
+          "expiresAt",
+          "maxUses"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "Common.schema.json#/$defs/InviteId"
+          },
+          "code": {
+            "$ref": "Common.schema.json#/$defs/InviteCode"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "expiresAt": {
+            "$ref": "Common.schema.json#/$defs/Timestamp"
+          },
+          "maxUses": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 20
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "invites": [
+        {
+          "id": "5c1e9a7b3d2f4e6a8c0b1d3f5a7c9e1b",
+          "code": "K7QM-2HXA-9RTV",
+          "label": "Family wave 1",
+          "expiresAt": "2026-11-20T10:00:00Z",
+          "maxUses": 1
+        }
+      ]
+    }
+  ]
+}

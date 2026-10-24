@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/RunRequest.schema.json",
+  "title": "RunRequest",
+  "description": "Draft (Phase 2; not registered before then). POST /admin/runs/harvest request: a forced harvest of every source or of one.",
+  "x-phase": "P2",
+  "type": "object",
+  "required": [],
+  "properties": {
+    "sourceId": {
+      "$ref": "Common.schema.json#/$defs/Slug"
+    },
+    "force": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "force": true
+    },
+    {
+      "sourceId": "heise",
+      "force": true
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/Export.schema.json",
+  "title": "Export",
+  "description": "GET /me/export (attachment). account is the Me shape; documents are the caller's stored documents (snake_case, docs/data-model.md) without Cosmos system properties, pk or quota counters.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "schema",
+    "exportedAt",
+    "account",
+    "documents"
+  ],
+  "properties": {
+    "schema": {
+      "const": "mynews-export/1"
+    },
+    "exportedAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "account": {
+      "$ref": "Me.schema.json"
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "propertyNames": {
+          "not": {
+            "enum": [
+              "_rid",
+              "_self",
+              "_etag",
+              "_attachments",
+              "_ts",
+              "pk"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema": "mynews-export/1",
+      "exportedAt": "2026-10-21T10:00:00Z",
+      "account": {
+        "oid": "4f0d6c1e-8a3b-4c2d-9e7f-1a2b3c4d5e6f",
+        "uid": "3f9a1c0b7d2e4f6a8b1c3d5e7f9a0b2c",
+        "roles": [],
+        "createdAt": "2026-10-21T10:00:00Z",
+        "locale": "de-CH",
+        "languages": [
+          "de",
+          "en"
+        ],
+        "timeZone": "Europe/Zurich",
+        "settings": {
+          "briefSize": 12,
+          "editions": [
+            "morning",
+            "midday",
+            "evening"
+          ],
+          "somethingDifferent": true,
+          "emphasis": "balanced",
+          "openInReader": false,
+          "summaryInList": true,
+          "personalisedRanking": true,
+          "historyRetentionDays": 90
+        },
+        "consent": {
+          "aiProcessing": {
+            "granted": false,
+            "version": null
+          }
+        },
+        "onboarding": {
+          "completedAt": null
+        },
+        "minBuild": 0
+      },
+      "documents": [
+        {
+          "type": "me",
+          "id": "me",
+          "v": 1,
+          "status": "active",
+          "created_at": "2026-10-21T10:00:00Z",
+          "consent": {
+            "ai_processing": {
+              "granted": false,
+              "version": null,
+              "at": null
+            }
+          }
+        },
+        {
+          "type": "user",
+          "id": "4f0d6c1e-8a3b-4c2d-9e7f-1a2b3c4d5e6f",
+          "uid": "3f9a1c0b7d2e4f6a8b1c3d5e7f9a0b2c",
+          "status": "active",
+          "last_active_at": "2026-10-21T10:00:00Z"
+        }
+      ]
+    }
+  ]
+}

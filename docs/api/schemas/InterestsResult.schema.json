@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/InterestsResult.schema.json",
+  "title": "InterestsResult",
+  "description": "Draft (Phase 3; not registered before then). PATCH /me/interests response: per-change results plus the resulting follows and mutes.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "results",
+    "follows",
+    "mutes"
+  ],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "index",
+          "status",
+          "code"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "enum": [
+              "applied",
+              "unchanged",
+              "rejected"
+            ]
+          },
+          "code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_found",
+                  "invalid"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 50
+    },
+    "follows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "since"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "section",
+              "tag"
+            ]
+          },
+          "id": {
+            "$ref": "Common.schema.json#/$defs/Slug"
+          },
+          "since": {
+            "$ref": "Common.schema.json#/$defs/Timestamp"
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 300
+    },
+    "mutes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "until"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "section",
+              "tag"
+            ]
+          },
+          "id": {
+            "$ref": "Common.schema.json#/$defs/Slug"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "$ref": "Common.schema.json#/$defs/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 300
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminBlockRequest.schema.json",
+  "title": "AdminBlockRequest",
+  "description": "POST /admin/users/{uid}/block request. blocked:false unblocks.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "blocked"
+  ],
+  "properties": {
+    "blocked": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "blocked": true,
+      "reason": "Spam reports"
+    },
+    {
+      "blocked": false
+    }
+  ]
+}

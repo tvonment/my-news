@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminSuggestion.schema.json",
+  "title": "AdminSuggestion",
+  "description": "Draft (Phase 3; not registered before then). One suggestion as admins see it, with the automatic probe. No submitter ids.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "id",
+    "url",
+    "status",
+    "feed",
+    "sourceId",
+    "submittedAt",
+    "updatedAt",
+    "submitCount",
+    "probe",
+    "decidedAt",
+    "decisionNote"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "Common.schema.json#/$defs/SuggestionId"
+    },
+    "url": {
+      "$ref": "Common.schema.json#/$defs/Url"
+    },
+    "status": {
+      "$ref": "Common.schema.json#/$defs/SuggestionStatus"
+    },
+    "feed": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "title",
+            "homepage",
+            "lang",
+            "sampleHeadlines"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "homepage": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/Url"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lang": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/SourceLanguage"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sampleHeadlines": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              "maxItems": 3
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceId": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Slug"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "submittedAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "updatedAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "submitCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "probe": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "https",
+            "robots",
+            "contentSignal",
+            "tdmReserved",
+            "itemsLast7d"
+          ],
+          "properties": {
+            "https": {
+              "type": "boolean"
+            },
+            "robots": {
+              "enum": [
+                "allowed",
+                "disallowed",
+                "unknown"
+              ]
+            },
+            "contentSignal": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tdmReserved": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "itemsLast7d": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "decidedAt": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "decisionNote": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

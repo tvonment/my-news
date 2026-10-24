@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/SourcesResult.schema.json",
+  "title": "SourcesResult",
+  "description": "Draft (Phase 3; not registered before then). PATCH /me/sources response.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "results",
+    "sources"
+  ],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "index",
+          "status",
+          "code"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "enum": [
+              "applied",
+              "unchanged",
+              "rejected"
+            ]
+          },
+          "code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_found",
+                  "invalid"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 100
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "pausedUntil"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "Common.schema.json#/$defs/Slug"
+          },
+          "state": {
+            "enum": [
+              "subscribed",
+              "removed",
+              "paused"
+            ]
+          },
+          "pausedUntil": {
+            "anyOf": [
+              {
+                "$ref": "Common.schema.json#/$defs/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 300
+    }
+  },
+  "additionalProperties": false
+}

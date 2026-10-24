@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminReportResolve.schema.json",
+  "title": "AdminReportResolve",
+  "description": "Draft (Phase 3; not registered before then). POST /admin/reports/{id}/resolve request. Idempotent.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "resolution"
+  ],
+  "properties": {
+    "resolution": {
+      "enum": [
+        "fixed",
+        "no_action",
+        "source_flagged"
+      ]
+    },
+    "note": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "resolution": "fixed"
+    }
+  ]
+}

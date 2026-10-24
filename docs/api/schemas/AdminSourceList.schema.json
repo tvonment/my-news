@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminSourceList.schema.json",
+  "title": "AdminSourceList",
+  "description": "Draft (Phase 2; not registered before then). GET /admin/catalog: every source in every status.",
+  "x-phase": "P2",
+  "type": "object",
+  "required": [
+    "sources"
+  ],
+  "properties": {
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "AdminSource.schema.json"
+      },
+      "maxItems": 300
+    }
+  },
+  "additionalProperties": false
+}

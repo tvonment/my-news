@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/Invite.schema.json",
+  "title": "Invite",
+  "description": "One invite as admins see it (list item; revoke response). The code is never returned again.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "id",
+    "label",
+    "status",
+    "createdAt",
+    "createdBy",
+    "expiresAt",
+    "maxUses",
+    "uses",
+    "lastRedeemedAt"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "Common.schema.json#/$defs/InviteId"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "status": {
+      "enum": [
+        "active",
+        "used",
+        "expired",
+        "revoked"
+      ],
+      "description": "Derived: revoked, else used (uses >= maxUses), else expired, else active."
+    },
+    "createdAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "createdBy": {
+      "$ref": "Common.schema.json#/$defs/Uid"
+    },
+    "expiresAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "maxUses": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "uses": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "lastRedeemedAt": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "id": "5c1e9a7b3d2f4e6a8c0b1d3f5a7c9e1b",
+      "label": "Family wave 1",
+      "status": "active",
+      "createdAt": "2026-10-21T10:00:00Z",
+      "createdBy": "3f9a1c0b7d2e4f6a8b1c3d5e7f9a0b2c",
+      "expiresAt": "2026-11-20T10:00:00Z",
+      "maxUses": 1,
+      "uses": 0,
+      "lastRedeemedAt": null
+    }
+  ]
+}

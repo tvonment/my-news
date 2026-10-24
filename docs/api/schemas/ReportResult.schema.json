@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/ReportResult.schema.json",
+  "title": "ReportResult",
+  "description": "Draft (Phase 3; not registered before then). POST /me/reports response: 201 when new, 200 for an id already received.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "id",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "Common.schema.json#/$defs/Uuid"
+    },
+    "status": {
+      "const": "open"
+    }
+  },
+  "additionalProperties": false
+}

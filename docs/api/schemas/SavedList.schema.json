@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/SavedList.schema.json",
+  "title": "SavedList",
+  "description": "Draft (Phase 3; not registered before then). GET /me/saved: self-contained snapshots (no AI text), newest first, pages of 50, at most 500.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "items",
+    "nextCursor"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "storyId",
+          "title",
+          "url",
+          "publisher",
+          "publishedAt",
+          "teaser",
+          "savedAt",
+          "legacy"
+        ],
+        "properties": {
+          "storyId": {
+            "$ref": "Common.schema.json#/$defs/StoryId"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "url": {
+            "$ref": "Common.schema.json#/$defs/Url"
+          },
+          "publisher": {
+            "$ref": "Common.schema.json#/$defs/PublisherRef"
+          },
+          "publishedAt": {
+            "$ref": "Common.schema.json#/$defs/Timestamp"
+          },
+          "teaser": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "savedAt": {
+            "$ref": "Common.schema.json#/$defs/Timestamp"
+          },
+          "legacy": {
+            "type": "boolean",
+            "description": "Migrated from v1."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 50
+    },
+    "nextCursor": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Cursor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

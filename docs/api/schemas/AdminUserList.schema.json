@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminUserList.schema.json",
+  "title": "AdminUserList",
+  "description": "GET /admin/users. Newest first, at most 500; truncated when the cap cut the list.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "users",
+    "truncated"
+  ],
+  "properties": {
+    "users": {
+      "type": "array",
+      "items": {
+        "$ref": "AdminUser.schema.json"
+      },
+      "maxItems": 500
+    },
+    "truncated": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "users": [
+        {
+          "uid": "3f9a1c0b7d2e4f6a8b1c3d5e7f9a0b2c",
+          "status": "active",
+          "admin": false,
+          "createdAt": "2026-10-21T10:00:00Z",
+          "lastActiveAt": "2026-10-21T10:00:00Z",
+          "inviteLabel": "Family wave 1",
+          "locale": "de-CH",
+          "languages": [
+            "de"
+          ],
+          "blockedAt": null
+        }
+      ],
+      "truncated": false
+    }
+  ]
+}

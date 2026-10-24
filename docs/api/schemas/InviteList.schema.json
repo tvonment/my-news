@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/InviteList.schema.json",
+  "title": "InviteList",
+  "description": "GET /admin/invites?status=active|used|expired|revoked|all. Newest first, at most 200.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "invites"
+  ],
+  "properties": {
+    "invites": {
+      "type": "array",
+      "items": {
+        "$ref": "Invite.schema.json"
+      },
+      "maxItems": 200
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "invites": [
+        {
+          "id": "5c1e9a7b3d2f4e6a8c0b1d3f5a7c9e1b",
+          "label": "Family wave 1",
+          "status": "active",
+          "createdAt": "2026-10-21T10:00:00Z",
+          "createdBy": "3f9a1c0b7d2e4f6a8b1c3d5e7f9a0b2c",
+          "expiresAt": "2026-11-20T10:00:00Z",
+          "maxUses": 1,
+          "uses": 0,
+          "lastRedeemedAt": null
+        },
+        {
+          "id": "0a1b2c3d4e5f60718293a4b5c6d7e8f9",
+          "label": "Family wave 1",
+          "status": "used",
+          "createdAt": "2026-10-21T10:00:00Z",
+          "createdBy": "3f9a1c0b7d2e4f6a8b1c3d5e7f9a0b2c",
+          "expiresAt": "2026-11-20T10:00:00Z",
+          "maxUses": 1,
+          "uses": 1,
+          "lastRedeemedAt": "2026-10-21T12:00:00Z"
+        }
+      ]
+    }
+  ]
+}

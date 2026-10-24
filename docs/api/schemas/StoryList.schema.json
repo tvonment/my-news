@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/StoryList.schema.json",
+  "title": "StoryList",
+  "description": "Draft (Phase 3; not registered before then). GET /stories?section=|tag=|source=&cursor=: finite browsing over the last 48 h, pages of 30, at most 100 in total.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "filter",
+    "windowHours",
+    "order",
+    "stories",
+    "hiddenByFilters",
+    "nextCursor"
+  ],
+  "properties": {
+    "filter": {
+      "$ref": "Common.schema.json#/$defs/TopicTarget"
+    },
+    "windowHours": {
+      "const": 48
+    },
+    "order": {
+      "enum": [
+        "ranked",
+        "chronological"
+      ]
+    },
+    "stories": {
+      "type": "array",
+      "items": {
+        "$ref": "StoryCard.schema.json"
+      },
+      "maxItems": 30
+    },
+    "hiddenByFilters": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nextCursor": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Cursor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

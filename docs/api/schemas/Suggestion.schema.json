@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/Suggestion.schema.json",
+  "title": "Suggestion",
+  "description": "Draft (Phase 3; not registered before then). A source suggestion as its submitter sees it (POST response, GET by id, list item). The app polls every 2 s for up to 60 s while status is checking.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "id",
+    "url",
+    "status",
+    "feed",
+    "sourceId",
+    "submittedAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "Common.schema.json#/$defs/SuggestionId"
+    },
+    "url": {
+      "$ref": "Common.schema.json#/$defs/Url"
+    },
+    "status": {
+      "$ref": "Common.schema.json#/$defs/SuggestionStatus"
+    },
+    "feed": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "title",
+            "homepage",
+            "lang",
+            "sampleHeadlines"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "homepage": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/Url"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lang": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/SourceLanguage"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sampleHeadlines": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              "maxItems": 3
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceId": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Slug"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "submittedAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "updatedAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    }
+  },
+  "additionalProperties": false
+}

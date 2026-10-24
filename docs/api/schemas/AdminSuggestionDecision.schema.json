@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminSuggestionDecision.schema.json",
+  "title": "AdminSuggestionDecision",
+  "description": "Draft (Phase 3; not registered before then). POST /admin/suggestions/{id}/decision. Approval creates the catalog source as pending.",
+  "x-phase": "P3",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "decision",
+        "tier",
+        "section",
+        "tags",
+        "flags",
+        "aiPolicy",
+        "legal",
+        "defaultOn"
+      ],
+      "properties": {
+        "decision": {
+          "const": "approve"
+        },
+        "tier": {
+          "$ref": "Common.schema.json#/$defs/Tier"
+        },
+        "section": {
+          "$ref": "Common.schema.json#/$defs/SectionId"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "$ref": "Common.schema.json#/$defs/Slug"
+          },
+          "maxItems": 10
+        },
+        "flags": {
+          "type": "object",
+          "required": [
+            "paywallHeavy",
+            "satire",
+            "rumour"
+          ],
+          "properties": {
+            "paywallHeavy": {
+              "type": "boolean"
+            },
+            "satire": {
+              "type": "boolean"
+            },
+            "rumour": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "aiPolicy": {
+          "type": "object",
+          "required": [
+            "embed",
+            "classify",
+            "fulltext",
+            "summarize",
+            "translate"
+          ],
+          "properties": {
+            "embed": {
+              "type": "boolean"
+            },
+            "classify": {
+              "type": "boolean"
+            },
+            "fulltext": {
+              "type": "boolean"
+            },
+            "summarize": {
+              "type": "boolean"
+            },
+            "translate": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "legal": {
+          "type": "object",
+          "required": [
+            "basis",
+            "evidenceUrl",
+            "checkedAt",
+            "note"
+          ],
+          "properties": {
+            "basis": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "evidenceUrl": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/Url"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "checkedAt": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/Date"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "note": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "defaultOn": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "decision"
+      ],
+      "properties": {
+        "decision": {
+          "const": "reject"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "examples": [
+    {
+      "decision": "reject",
+      "note": "Not a news source."
+    }
+  ]
+}

@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/Catalog.schema.json",
+  "title": "Catalog",
+  "description": "Draft (Phase 3; not registered before then). GET /catalog (ETag): every active source with the member's state, plus starter packs per section and language.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "catalogVersion",
+    "sources",
+    "starterPacks"
+  ],
+  "properties": {
+    "catalogVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CatalogSource",
+        "unevaluatedProperties": false
+      },
+      "maxItems": 300
+    },
+    "starterPacks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "section",
+          "lang",
+          "sourceIds"
+        ],
+        "properties": {
+          "section": {
+            "$ref": "Common.schema.json#/$defs/SectionId"
+          },
+          "lang": {
+            "$ref": "Common.schema.json#/$defs/Language"
+          },
+          "sourceIds": {
+            "type": "array",
+            "items": {
+              "$ref": "Common.schema.json#/$defs/Slug"
+            },
+            "maxItems": 50,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 50
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "CatalogSource": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "homepage",
+        "lang",
+        "country",
+        "section",
+        "tags",
+        "kind",
+        "flags",
+        "aiSummaries",
+        "defaultOn",
+        "typicalPerDay",
+        "my"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "Common.schema.json#/$defs/Slug"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "homepage": {
+          "anyOf": [
+            {
+              "$ref": "Common.schema.json#/$defs/Url"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lang": {
+          "$ref": "Common.schema.json#/$defs/SourceLanguage"
+        },
+        "country": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "section": {
+          "$ref": "Common.schema.json#/$defs/SectionRef"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "$ref": "Common.schema.json#/$defs/Ref"
+          },
+          "maxItems": 10
+        },
+        "kind": {
+          "$ref": "Common.schema.json#/$defs/SourceKind"
+        },
+        "flags": {
+          "type": "object",
+          "required": [
+            "paywallHeavy",
+            "satire",
+            "rumour",
+            "aiReserved"
+          ],
+          "properties": {
+            "paywallHeavy": {
+              "type": "boolean"
+            },
+            "satire": {
+              "type": "boolean"
+            },
+            "rumour": {
+              "type": "boolean"
+            },
+            "aiReserved": {
+              "type": "boolean",
+              "description": "The publisher reserves AI use (Tier C): only the headline reaches the classifier; never summarised."
+            }
+          },
+          "additionalProperties": false
+        },
+        "aiSummaries": {
+          "type": "boolean",
+          "description": "Tier A: AI summaries may appear."
+        },
+        "defaultOn": {
+          "type": "boolean"
+        },
+        "typicalPerDay": {
+          "type": "number",
+          "minimum": 0
+        },
+        "my": {
+          "type": "object",
+          "required": [
+            "state",
+            "pausedUntil"
+          ],
+          "properties": {
+            "state": {
+              "$ref": "Common.schema.json#/$defs/SourceState"
+            },
+            "pausedUntil": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/Timestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  }
+}

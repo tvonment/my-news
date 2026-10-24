@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/Health.schema.json",
+  "title": "Health",
+  "description": "GET /health: static liveness and the contract version. No I/O.",
+  "x-phase": "P0",
+  "type": "object",
+  "required": [
+    "status",
+    "api",
+    "minBuild",
+    "time"
+  ],
+  "properties": {
+    "status": {
+      "const": "ok"
+    },
+    "api": {
+      "type": "integer",
+      "const": 1
+    },
+    "minBuild": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "time": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "status": "ok",
+      "api": 1,
+      "minBuild": 0,
+      "time": "2026-10-21T10:00:00Z"
+    }
+  ]
+}

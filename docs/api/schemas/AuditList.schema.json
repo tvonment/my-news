@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AuditList.schema.json",
+  "title": "AuditList",
+  "description": "Draft (Phase 3; not registered before then). GET /admin/audit?cursor=: newest first, pages of 100, at most 1,000. details never contain an oid, email, invite code or user text.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "entries",
+    "nextCursor"
+  ],
+  "properties": {
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "actor",
+          "action",
+          "target",
+          "details"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "at": {
+            "$ref": "Common.schema.json#/$defs/Timestamp"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "$ref": "Common.schema.json#/$defs/Uid"
+              },
+              {
+                "const": "system"
+              }
+            ]
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "pattern": "^[a-z_]+\\.[a-z_]+$"
+          },
+          "target": {
+            "type": "object",
+            "required": [
+              "type",
+              "id"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "user",
+                  "invite",
+                  "deletion",
+                  "source",
+                  "suggestion",
+                  "report",
+                  "run"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              }
+            },
+            "additionalProperties": false
+          },
+          "details": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 100
+    },
+    "nextCursor": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Cursor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

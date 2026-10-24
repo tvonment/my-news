@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/BriefList.schema.json",
+  "title": "BriefList",
+  "description": "Draft (Phase 3; not registered before then). GET /briefs?days=1..7: earlier editions, newest first, at most 21.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "editions"
+  ],
+  "properties": {
+    "editions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "slot",
+          "date",
+          "publishedAt",
+          "size",
+          "readCount"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "Common.schema.json#/$defs/EditionId"
+          },
+          "slot": {
+            "$ref": "Common.schema.json#/$defs/Slot"
+          },
+          "date": {
+            "$ref": "Common.schema.json#/$defs/Date"
+          },
+          "publishedAt": {
+            "$ref": "Common.schema.json#/$defs/Timestamp"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "readCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 21
+    }
+  },
+  "additionalProperties": false
+}

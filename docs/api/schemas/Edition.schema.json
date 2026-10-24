@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/Edition.schema.json",
+  "title": "Edition",
+  "description": "Draft (Phase 3; not registered before then). GET /brief. sections always lists must_know (<= 2), for_you and something_different (<= 1), in that order. Never padded.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "edition",
+    "sections",
+    "moreTodayCount"
+  ],
+  "properties": {
+    "edition": {
+      "type": "object",
+      "required": [
+        "id",
+        "slot",
+        "date",
+        "publishedAt",
+        "builtAt",
+        "nextExpectedAt",
+        "size",
+        "readingMinutes",
+        "readCount"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "Common.schema.json#/$defs/EditionId"
+        },
+        "slot": {
+          "$ref": "Common.schema.json#/$defs/Slot"
+        },
+        "date": {
+          "$ref": "Common.schema.json#/$defs/Date"
+        },
+        "publishedAt": {
+          "$ref": "Common.schema.json#/$defs/Timestamp"
+        },
+        "builtAt": {
+          "$ref": "Common.schema.json#/$defs/Timestamp"
+        },
+        "nextExpectedAt": {
+          "$ref": "Common.schema.json#/$defs/Timestamp"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "readingMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "readCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/EditionSection"
+            }
+          ],
+          "properties": {
+            "kind": {
+              "const": "must_know"
+            },
+            "stories": {
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/EditionSection"
+            }
+          ],
+          "properties": {
+            "kind": {
+              "const": "for_you"
+            },
+            "stories": {
+              "maxItems": 15
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/EditionSection"
+            }
+          ],
+          "properties": {
+            "kind": {
+              "const": "something_different"
+            },
+            "stories": {
+              "maxItems": 1
+            }
+          }
+        }
+      ],
+      "items": false
+    },
+    "moreTodayCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "EditionSection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "stories",
+        "hiddenByFilters"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "must_know",
+            "for_you",
+            "something_different"
+          ]
+        },
+        "stories": {
+          "type": "array",
+          "items": {
+            "$ref": "StoryCard.schema.json"
+          },
+          "maxItems": 15
+        },
+        "hiddenByFilters": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "edition": {
+        "id": "2026-10-21.morning",
+        "slot": "morning",
+        "date": "2026-10-21",
+        "publishedAt": "2026-10-21T05:21:00Z",
+        "builtAt": "2026-10-21T05:24:10Z",
+        "nextExpectedAt": "2026-10-21T10:31:00Z",
+        "size": 1,
+        "readingMinutes": 1,
+        "readCount": 0
+      },
+      "sections": [
+        {
+          "kind": "must_know",
+          "stories": [],
+          "hiddenByFilters": 1
+        },
+        {
+          "kind": "for_you",
+          "stories": [
+            {
+              "id": "s20261021Ab3dE_gH1jKl",
+              "title": "Bundesrat legt Botschaft zur KI-Regulierung vor",
+              "url": "https://www.srf.ch/news/schweiz/ki-regulierung",
+              "publisher": {
+                "id": "srf-news",
+                "name": "SRF News"
+              },
+              "publishedAt": "2026-10-21T04:12:00Z",
+              "lang": "de",
+              "section": {
+                "id": "switzerland",
+                "label": "Schweiz"
+              },
+              "tags": [
+                {
+                  "id": "bundesrat",
+                  "label": "Bundesrat"
+                },
+                {
+                  "id": "ai-regulation",
+                  "label": "KI-Regulierung"
+                }
+              ],
+              "contentType": "report",
+              "teaser": "Der Bundesrat will KI-Anwendungen mit hohem Risiko strenger regeln.",
+              "summaryFirst": null,
+              "summaryStatus": "not_allowed",
+              "byline": null,
+              "outletsCount": 6,
+              "paywalled": false,
+              "satire": false,
+              "isUpdate": false,
+              "reasons": [
+                {
+                  "code": "follow_section",
+                  "target": {
+                    "type": "section",
+                    "id": "switzerland",
+                    "label": "Schweiz"
+                  },
+                  "count": null
+                },
+                {
+                  "code": "coverage",
+                  "target": null,
+                  "count": 6
+                }
+              ],
+              "my": {
+                "read": false,
+                "saved": false,
+                "reaction": null
+              }
+            }
+          ],
+          "hiddenByFilters": 0
+        },
+        {
+          "kind": "something_different",
+          "stories": [],
+          "hiddenByFilters": 0
+        }
+      ],
+      "moreTodayCount": 14
+    }
+  ]
+}

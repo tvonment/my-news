@@ -1,0 +1,461 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminHealth.schema.json",
+  "title": "AdminHealth",
+  "description": "GET /admin/health: deep checks, always 200; status is degraded when any check fails. Exception text is never echoed: a failed check reports an error class. Phase 2 adds pool, budget and cycle checks; legacyCosmos goes away with the v1 harvest.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "status",
+    "checkedAt",
+    "api",
+    "minBuild",
+    "identityDeleteMode",
+    "hmacKeyFingerprint",
+    "checks"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "ok",
+        "degraded"
+      ]
+    },
+    "checkedAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "api": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "minBuild": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "identityDeleteMode": {
+      "$ref": "Common.schema.json#/$defs/IdentityMode"
+    },
+    "hmacKeyFingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$",
+      "description": "sha256(\"mynews-hmac-fp:\" + key)[:12]."
+    },
+    "checks": {
+      "type": "object",
+      "required": [
+        "config",
+        "cosmos",
+        "jwks",
+        "queues",
+        "harvest",
+        "deletions",
+        "secrets"
+      ],
+      "properties": {
+        "config": {
+          "type": "object",
+          "required": [
+            "ok",
+            "missing",
+            "unresolvedKeyVaultRefs"
+          ],
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "missing": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "uniqueItems": true,
+              "description": "Setting names only, never values."
+            },
+            "unresolvedKeyVaultRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "cosmos": {
+          "type": "object",
+          "required": [
+            "ok",
+            "ms",
+            "error"
+          ],
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "ms": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/CheckError"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "legacyCosmos": {
+          "type": "object",
+          "required": [
+            "ok",
+            "ms",
+            "error"
+          ],
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "ms": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/CheckError"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "jwks": {
+          "type": "object",
+          "required": [
+            "ok",
+            "ms",
+            "error",
+            "keys"
+          ],
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "ms": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/CheckError"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "keys": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "queues": {
+          "type": "object",
+          "required": [
+            "ok",
+            "ms",
+            "error",
+            "poison",
+            "oldestMessageMinutes"
+          ],
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "ms": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/CheckError"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "poison": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "propertyNames": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 63,
+                "pattern": "^[a-z0-9-]+$"
+              }
+            },
+            "oldestMessageMinutes": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "propertyNames": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 63,
+                "pattern": "^[a-z0-9-]+$"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "harvest": {
+          "type": "object",
+          "required": [
+            "ok",
+            "lastRunAt",
+            "lastRunOk",
+            "ageMinutes"
+          ],
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "lastRunAt": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/Timestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lastRunOk": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ageMinutes": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "deletions": {
+          "type": "object",
+          "required": [
+            "ok",
+            "stuckPurging",
+            "overdueIdentityRemovals"
+          ],
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "stuckPurging": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "overdueIdentityRemovals": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "secrets": {
+          "type": "object",
+          "required": [
+            "ok",
+            "appleSecretRenewBy",
+            "daysLeft"
+          ],
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "appleSecretRenewBy": {
+              "anyOf": [
+                {
+                  "$ref": "Common.schema.json#/$defs/Date"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "daysLeft": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "status": "ok",
+      "checkedAt": "2026-10-21T10:00:00Z",
+      "api": 1,
+      "minBuild": 0,
+      "identityDeleteMode": "manual",
+      "hmacKeyFingerprint": "a1b2c3d4e5f6",
+      "checks": {
+        "config": {
+          "ok": true,
+          "missing": [],
+          "unresolvedKeyVaultRefs": []
+        },
+        "cosmos": {
+          "ok": true,
+          "ms": 18,
+          "error": null
+        },
+        "legacyCosmos": {
+          "ok": true,
+          "ms": 25,
+          "error": null
+        },
+        "jwks": {
+          "ok": true,
+          "ms": 2,
+          "error": null,
+          "keys": 7
+        },
+        "queues": {
+          "ok": true,
+          "ms": 41,
+          "error": null,
+          "poison": {
+            "account-purge-poison": 0,
+            "ops-jobs-poison": 0
+          },
+          "oldestMessageMinutes": {
+            "account-purge": null,
+            "ops-jobs": null
+          }
+        },
+        "harvest": {
+          "ok": true,
+          "lastRunAt": "2026-10-21T09:30:04Z",
+          "lastRunOk": true,
+          "ageMinutes": 30
+        },
+        "deletions": {
+          "ok": true,
+          "stuckPurging": 0,
+          "overdueIdentityRemovals": 0
+        },
+        "secrets": {
+          "ok": true,
+          "appleSecretRenewBy": "2027-04-01",
+          "daysLeft": 162
+        }
+      }
+    }
+  ]
+}

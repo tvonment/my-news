@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/DeleteAccepted.schema.json",
+  "title": "DeleteAccepted",
+  "description": "DELETE /me, 202. identityRemoval is manual (the owner removes the Entra user within 7 days) or automatic (graph mode, Later).",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "state",
+    "identityRemoval"
+  ],
+  "properties": {
+    "state": {
+      "const": "deleting"
+    },
+    "identityRemoval": {
+      "enum": [
+        "manual",
+        "automatic"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "state": "deleting",
+      "identityRemoval": "manual"
+    }
+  ]
+}

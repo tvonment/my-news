@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/SearchRequest.schema.json",
+  "title": "SearchRequest",
+  "description": "Draft (Phase 3; not registered before then). POST /stories/search request. The query is in the body so it never reaches request telemetry.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "query"
+  ],
+  "properties": {
+    "query": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 64
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "query": "UBS"
+    }
+  ]
+}

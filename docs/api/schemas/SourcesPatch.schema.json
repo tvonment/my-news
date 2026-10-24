@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/SourcesPatch.schema.json",
+  "title": "SourcesPatch",
+  "description": "Draft (Phase 3; not registered before then). PATCH /me/sources: an idempotent change list. removed is a hard filter; neutral is not. paused requires until.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "changes"
+  ],
+  "properties": {
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "Common.schema.json#/$defs/Slug"
+          },
+          "state": {
+            "$ref": "Common.schema.json#/$defs/SourceState"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "$ref": "Common.schema.json#/$defs/InputTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "if": {
+          "properties": {
+            "state": {
+              "const": "paused"
+            }
+          },
+          "required": [
+            "state"
+          ]
+        },
+        "then": {
+          "required": [
+            "until"
+          ],
+          "properties": {
+            "until": {
+              "$ref": "Common.schema.json#/$defs/InputTimestamp"
+            }
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 100
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "changes": [
+        {
+          "id": "heise",
+          "state": "subscribed"
+        },
+        {
+          "id": "macrumors",
+          "state": "paused",
+          "until": "2026-10-28T10:00:00Z"
+        }
+      ]
+    }
+  ]
+}
