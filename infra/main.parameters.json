@@ -19,6 +19,42 @@
     },
     "guardBudgetStartDate": {
       "value": "${GUARD_BUDGET_START_DATE}"
+    },
+    "cosmosMode": {
+      "value": "${COSMOS_MODE=freeTier}"
+    },
+    "disabledTimers": {
+      "value": "${DISABLED_TIMERS=}"
+    },
+    "entraTenantId": {
+      "value": "${ENTRA_TENANT_ID=}"
+    },
+    "entraTenantSubdomain": {
+      "value": "${ENTRA_TENANT_SUBDOMAIN=}"
+    },
+    "entraApiClientId": {
+      "value": "${ENTRA_API_CLIENT_ID=}"
+    },
+    "entraAllowedClientIds": {
+      "value": "${ENTRA_ALLOWED_CLIENT_IDS=}"
+    },
+    "entraRequiredScope": {
+      "value": "${ENTRA_REQUIRED_SCOPE=access_as_user}"
+    },
+    "entraAdminRole": {
+      "value": "${ENTRA_ADMIN_ROLE=admin}"
+    },
+    "hmacKey": {
+      "value": "${MYNEWS_HMAC_KEY}"
+    },
+    "identityDeleteMode": {
+      "value": "${IDENTITY_DELETE_MODE=manual}"
+    },
+    "minSupportedBuild": {
+      "value": "${MIN_SUPPORTED_BUILD=0}"
+    },
+    "appleRenewBy": {
+      "value": "${APPLE_SECRET_RENEW_BY=}"
     }
   }
 }

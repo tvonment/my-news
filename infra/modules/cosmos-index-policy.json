@@ -1,0 +1,29 @@
+{
+  "indexingMode": "consistent",
+  "automatic": true,
+  "includedPaths": [
+    {"path": "/type/?"},
+    {"path": "/status/?"},
+    {"path": "/kind/?"},
+    {"path": "/signal/?"},
+    {"path": "/uid/?"},
+    {"path": "/created_at/?"},
+    {"path": "/last_active_at/?"},
+    {"path": "/deletion_requested_at/?"},
+    {"path": "/enrich_status/?"},
+    {"path": "/first_seen_at/?"},
+    {"path": "/last_pub_at/?"},
+    {"path": "/source_ids/[]/?"}
+  ],
+  "excludedPaths": [
+    {"path": "/*"},
+    {"path": "/_etag/?"}
+  ],
+  "compositeIndexes": [
+    [{"path": "/type", "order": "ascending"}, {"path": "/created_at", "order": "descending"}],
+    [{"path": "/type", "order": "ascending"}, {"path": "/status", "order": "ascending"}, {"path": "/created_at", "order": "descending"}],
+    [{"path": "/type", "order": "ascending"}, {"path": "/kind", "order": "ascending"}, {"path": "/created_at", "order": "descending"}],
+    [{"path": "/type", "order": "ascending"}, {"path": "/signal", "order": "ascending"}, {"path": "/created_at", "order": "descending"}],
+    [{"path": "/enrich_status", "order": "ascending"}, {"path": "/first_seen_at", "order": "descending"}]
+  ]
+}
