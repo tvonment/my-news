@@ -4,6 +4,16 @@ Runs far more often than the digest (every 30-60 min vs 3x/day) because several
 feeds carry only 10 items — The Verge, NPR and the Microsoft WordPress blogs.
 On a busy day those windows roll over in well under 8 hours, so a digest-rate
 crawl would silently and permanently lose stories with no error to alert anyone.
+
+Since Phase 1 this v1 harvest lives in v1's container, ``items``
+(``LEGACY_COSMOS_CONTAINER``), next to the v2 container ``news`` that every new
+module uses (docs/data-model.md section 10). Every Cosmos call here names the
+legacy container explicitly: ``get_container()`` without a name is ``news``, so
+a call that forgot it would quietly write v1 documents into the v2 container.
+And the whole run is paced to RU_RATE_LEGACY_HARVEST (350 RU/s): ``items`` was
+lowered to 400 RU/s to make room for ``news`` inside the free tier, and a busy
+harvest used to burst to 550-600. Phase 2 deletes this module together with
+the v1 stages, in the release that ships harvest v2.
 """
 
 from __future__ import annotations
@@ -60,8 +70,13 @@ class HarvestOutcome:
             self.stale_feeds = []
 
 
+def _legacy() -> str:
+    """The container every call in this module passes explicitly (``items``)."""
+    return get_settings().legacy_cosmos_container
+
+
 def _load_state(source_id: str) -> SourceState:
-    doc = cosmos.read(source_id, SOURCE_PK)
+    doc = cosmos.read(source_id, SOURCE_PK, container=_legacy())
     if doc is None:
         return SourceState(id=source_id)
     known = {f for f in SourceState.__dataclass_fields__ if f != "type"}
@@ -102,10 +117,14 @@ def harvest_source(
     client: httpx.Client,
     now: datetime,
     outcome: HarvestOutcome,
+    *,
+    force: bool = False,
 ) -> None:
     state = _load_state(source.id)
 
-    if not _is_due(source, state, now):
+    # A forced run (the ops-jobs worker) polls now, whatever the schedule and
+    # the failure backoff say.
+    if not force and not _is_due(source, state, now):
         return
 
     outcome.polled += 1
@@ -117,7 +136,7 @@ def harvest_source(
         state.last_error = result.error
         outcome.failed += 1
         log.warning("Fetch failed for %s: %s", source.id, result.error)
-        cosmos.upsert(state.to_doc())
+        cosmos.upsert(state.to_doc(), container=_legacy())
         return
 
     state.consecutive_failures = 0
@@ -140,7 +159,7 @@ def harvest_source(
         state.body_sha256 = result.body_sha256 or state.body_sha256
         state.etag = result.etag or state.etag
         state.last_modified = result.last_modified or state.last_modified
-        cosmos.upsert(state.to_doc())
+        cosmos.upsert(state.to_doc(), container=_legacy())
         return
 
     try:
@@ -150,7 +169,7 @@ def harvest_source(
         state.last_error = f"not a feed: {exc}"
         outcome.failed += 1
         log.warning("Source %s did not return a feed: %s", source.id, exc)
-        cosmos.upsert(state.to_doc())
+        cosmos.upsert(state.to_doc(), container=_legacy())
         return
 
     settings = get_settings()
@@ -183,7 +202,7 @@ def harvest_source(
         )
         # Dedupe is the 409 from create_item, not a preceding query: ~1 RU and
         # no race between the check and the write.
-        if cosmos.try_create(article.to_doc()):
+        if cosmos.try_create(article.to_doc(), container=_legacy()):
             new_count += 1
             if (
                 source.enrich
@@ -192,7 +211,7 @@ def harvest_source(
             ):
                 if enrich_lead(article, client):
                     outcome.enriched += 1
-                    cosmos.upsert(article.to_doc())
+                    cosmos.upsert(article.to_doc(), container=_legacy())
 
     outcome.items_new += new_count
     state.etag = result.etag
@@ -210,7 +229,7 @@ def harvest_source(
             state.newest_item_at,
         )
 
-    cosmos.upsert(state.to_doc())
+    cosmos.upsert(state.to_doc(), container=_legacy())
     log.info("Harvested %s: %d items, %d new", source.id, len(parsed.items), new_count)
 
 
@@ -248,7 +267,19 @@ def enrich_lead(article: Article, client: httpx.Client) -> bool:
     return True
 
 
-def run_harvest(only_source: str | None = None) -> RunRecord:
+def run_harvest(only_source: str | None = None, *, force: bool = False) -> RunRecord:
+    """One harvest of every enabled source (or of ``only_source``). ``force``
+    skips the per-source schedule, for the ops-jobs worker's on-demand run.
+
+    Paced as a whole: the pacer sees every call's request charge, including
+    the source list and the run record, and sleeps once the run has spent more
+    than RU_RATE_LEGACY_HARVEST per second with a one-second burst.
+    """
+    with cosmos.paced(cosmos.RU_RATE_LEGACY_HARVEST):
+        return _run_harvest(only_source, force=force)
+
+
+def _run_harvest(only_source: str | None, *, force: bool) -> RunRecord:
     now = utcnow()
     record = RunRecord(id=f"harvest-{now:%Y%m%dT%H%M%SZ}", kind="harvest", started_at=iso(now))
     outcome = HarvestOutcome()
@@ -260,7 +291,7 @@ def run_harvest(only_source: str | None = None) -> RunRecord:
     with httpx.Client(follow_redirects=True, timeout=DEFAULT_TIMEOUT, http2=True) as client:
         for source in sources:
             try:
-                harvest_source(source, client, now, outcome)
+                harvest_source(source, client, now, outcome, force=force)
             except Exception:
                 # One broken feed must not take down the run; the next cycle
                 # retries it with backoff.
@@ -277,7 +308,7 @@ def run_harvest(only_source: str | None = None) -> RunRecord:
     record.finished_at = iso(utcnow())
     record.ok = outcome.failed == 0
 
-    cosmos.upsert(record.to_doc())
+    cosmos.upsert(record.to_doc(), container=_legacy())
     log.info(
         "Harvest complete: polled=%d unchanged=%d failed=%d seen=%d new=%d too_old=%d stale=%s",
         outcome.polled,

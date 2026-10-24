@@ -38,8 +38,11 @@ backend/        Python Azure Functions (the Python v2 programming model, not MyN
                 with the v1 harvest.
   scripts/      probe_feeds.py, export_all.py, rescue_dump.py
   tests/        pytest, no network
-scripts/        whatif.sh + whatif_guard.py (the preprovision gate), postprovision.sh
-docs/           cost.md: what this actually costs, measured
+scripts/        whatif.sh + whatif_guard.py (the preprovision gate), postprovision.sh;
+                entra_setup.py (the tenant's app registrations); get_token.py and
+                mynews_admin.py (sign-in and the admin CLI, see "Identity and admin")
+docs/           cost.md: what this actually costs, measured; api.md + api/schemas/ (the HTTP
+                contract); data-model.md; identity.md (the tenant runbook); runbooks/
 ```
 
 ## Getting started
@@ -71,7 +74,19 @@ azd provision && azd deploy   # the preprovision hook runs whatif.sh again
 
 # 5. Rescue every point-readable document (see "The float16 outage" below)
 cd backend && .venv/bin/python scripts/rescue_dump.py
+
+# 6. Sign in and call the API (Phase 1). backend/.venv has msal; the ids come from the azd env.
+#    The first run opens the browser, and later runs reuse the token cache.
+cd .. && TOKEN=$(backend/.venv/bin/python scripts/get_token.py)
+curl -sS -H "Authorization: Bearer $TOKEN" "$(azd env get-value SERVICE_BACKEND_URI)/api/me"
+backend/.venv/bin/python scripts/mynews_admin.py health
 ```
+
+Phase 1 goes to production in the order in `docs/runbooks/phase1-rollout.md`: provision with the
+harvest switched off (`DISABLED_TIMERS=harvest_timer`), deploy, then provision again to switch it
+back on. The live v1 harvest reads `COSMOS_CONTAINER`, which the provision points at the new `news`
+container, and the new code needs settings that only the provision creates. So the old code must
+not harvest on the new settings, and the new code must not run on the old ones.
 
 `scripts/verify_vector_search.py` is superseded — the container no longer has a
 vector policy. See below.
@@ -85,7 +100,9 @@ account is refused the free tier: there is one per subscription.
 `az deployment sub what-if` (`main.bicep` is subscription-scoped) and pipes the JSON into
 `scripts/whatif_guard.py`, which stops the provision before ARM touches anything when one of its
 rules blocks. Most rules guard a row of "Things that will cost you money" below; the rest guard data
-(backup mode, partition keys, the vector policy, any Delete). The float16 outage below is why:
+(backup mode, partition keys, the vector policy, any Delete) and the app settings: what-if can't see
+the live settings, so `whatif.sh` lists their names (never the values) and the guard blocks a
+provision whose template would drop one. The float16 outage below is why:
 `azd provision` would have quietly re-applied the policy that broke the container. To make a blocked
 change on purpose, name the rules you accept, comma-separated, as the guard prints them:
 `WHATIF_ALLOW=<rule-id>,<rule-id> azd provision`.
@@ -146,6 +163,55 @@ deployed again is unclear (an old note says new customers lost it on 2026-08-07;
 still lists it as GA until it retires on 2027-02-09), so do not count on rolling back to v1's scorer.
 The queues go through ARM rather than `az storage queue delete` because the account
 has shared-key access off and no person holds a queue data role on it.
+
+## Identity and admin
+
+People sign in through **Microsoft Entra External ID**: the tenant "von Mentlen News"
+(`vonmentlennews.onmicrosoft.com`, country Switzerland), with email+password or Sign in with Apple.
+The backend takes only tokens from that tenant for its own API, and only from the iOS app or the CLI
+([docs/api.md §2](docs/api.md#2-authentication)). Invite codes decide who gets in.
+
+**[docs/identity.md](docs/identity.md) is the runbook.** It covers the tenant, the app registrations
+`mynews-api`, `mynews-ios` and `mynews-cli`, the user flow, Apple, and the `admin` role. It also holds
+the 6-monthly Apple renewal, manual identity removal, and the device spike and its results. The ids
+live in the azd env, never in this repository.
+
+**Sign-in from the command line.** `scripts/get_token.py` signs in through `mynews-cli` with MSAL. It
+prints only the access token, so `TOKEN=$(...)` is safe.
+
+```sh
+backend/.venv/bin/python scripts/get_token.py                      # you, from the cache when it can
+backend/.venv/bin/python scripts/get_token.py --decode             # header and claims, no signature
+backend/.venv/bin/python scripts/get_token.py --force-refresh      # a new token, e.g. after a role change
+backend/.venv/bin/python scripts/get_token.py --profile test --login   # another identity, in its own profile
+backend/.venv/bin/python scripts/get_token.py --profile test --sign-out
+```
+
+- **Profiles.** Each profile holds one identity, cached in `~/.cache/mynews/token-cache-<profile>.json`
+  (0600, outside the repo). The cache holds refresh tokens: treat it like a password.
+- **Signing up.** A new identity signs up from the hosted page's "No account? Create one" link. The
+  tenant rejects MSAL's `prompt=create`.
+- **Exit status.** 2 means a setting is missing or wrong. 3 means the sign-in failed.
+
+**The admin CLI.** `scripts/mynews_admin.py` is the admin area until the iOS app has one. It signs in
+the same way (pass `--profile` for another identity), calls `SERVICE_BACKEND_URI` (or `--base-url`),
+and needs the `admin` role. `--json` prints the raw response. Errors print as `code: message`, with
+their details and request id.
+
+| Command | Does |
+|---|---|
+| `health` | Deep checks: config, Cosmos, JWKS, queues, harvest, deletions, secrets. Exit 1 when degraded |
+| `overview` | Counts of users, invites and deletions; the last harvest; days left on the Apple secret |
+| `invites create --label "Family wave 1" [--max-uses N] [--expires-days D] [--count C]` | Mints codes. **Each code prints once**: the server keeps only its hash |
+| `invites list [--status all\|active\|used\|expired\|revoked]` | The newest 200 invites |
+| `invites revoke <id>` | A revoked code redeems as `invite_not_found` |
+| `users list` | Accounts by `uid`, with no emails and no oids |
+| `users block <uid> [--reason ...]`, `users unblock <uid>` | Takes effect on the account's next request |
+| `deletions list [--status ...]` | Pending identity removals, with the `oid` to delete in Entra |
+| `deletions complete <uid>` | Records that the Entra user is deleted (docs/identity.md §8.1) |
+
+The first admin call also creates your own membership. `--accept-language 'de-CH,en;q=0.8'` sets its
+starting locale and content languages.
 
 ## Running the iOS app
 

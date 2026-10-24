@@ -3,6 +3,11 @@
 ``sources.yaml`` is the seed. On first run it is written into Cosmos as the
 ``sources`` config document, and from then on Cosmos is authoritative — that is
 what lets the iOS settings screen (M5) add and remove feeds without a deploy.
+
+This is the v1 source list, read only by the v1 harvest, so it lives in v1's
+container ``items`` (``LEGACY_COSMOS_CONTAINER``), and both calls below name it
+explicitly: ``get_container()`` without a name is the v2 container ``news``.
+Phase 2 replaces it with the catalog (``catalog/src|{id}`` in ``news``).
 """
 
 from __future__ import annotations
@@ -15,6 +20,7 @@ from typing import Any
 import yaml
 
 from core import cosmos
+from core.config import get_settings
 from core.models import USER_PK, utcnow
 
 log = logging.getLogger(__name__)
@@ -79,7 +85,7 @@ def load_sources(seed_if_missing: bool = True) -> list[Source]:
     anything already in Cosmos is left exactly as it is, including a source you
     disabled or retuned by hand.
     """
-    doc = cosmos.read(SOURCES_DOC_ID, USER_PK)
+    doc = cosmos.read(SOURCES_DOC_ID, USER_PK, container=get_settings().legacy_cosmos_container)
     if doc is None:
         if not seed_if_missing:
             return []
@@ -131,5 +137,6 @@ def save_sources(sources: list[Source]) -> None:
             "type": "config",
             "updated_at": utcnow().isoformat(),
             "sources": [asdict(s) for s in sources],
-        }
+        },
+        container=get_settings().legacy_cosmos_container,
     )

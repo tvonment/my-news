@@ -1,39 +1,41 @@
 """MyNews Azure Functions app (Python v2 programming model).
 
-v1 was retired on 2026-10-21. The digest and profile timers are gone, and so is
-every HTTP route except ``health``: feed, feedback, profile, categories, runs,
-refresh and digest. Nothing left in this app calls a model. Two functions
-remain:
+This file only creates the app, quiets the chatty third-party loggers and
+registers the blueprints; every function lives in one of them:
 
-* ``harvest_timer`` — every 30-60 min. Fetch, dedupe, store. No LLM, ~$0.
-  Frequent because several feeds carry only 10 items and would otherwise roll
-  over between runs. It keeps running until v2 replaces it: per the v2 plan,
-  the v1 harvest is deleted in the same release that ships harvest v2
-  (Phase 2), and until then the ``pipeline-silent`` alert keeps watching it.
-* ``health`` — anonymous, static, no I/O. Its docstring says why it stopped
-  probing Cosmos.
+* ``api/public.py``: ``health`` (anonymous, static, no I/O).
+* ``api/account.py``: the caller's own account — ``me_redeem``, ``me_get``,
+  ``me_patch``, ``me_delete``, ``me_export``.
+* ``api/admin.py``: the owner's admin routes, ``admin_*``.
+* ``jobs/timers.py``: ``harvest_timer`` (the v1 harvest, until Phase 2) and
+  ``maintenance_timer`` (daily 02:15 UTC).
+* ``jobs/queues.py``: ``account_purge_worker`` and ``ops_jobs_worker``.
 
-The v1 stages under ``pipeline/`` and ``core/`` (gate, score, summarize,
-cluster, digest, profile) are no longer reachable from here but stay in place;
-Phase 2 deletes them together with the v1 harvest. Phase 1 splits this file into
-``api/*`` blueprints and ``jobs/*``.
+docs/api.md section 5 is the route index, and tests/test_route_inventory.py
+holds the registered set against it, so a later phase's route cannot appear
+early by accident.
 
-Schedules are UTC: Flex Consumption does not support WEBSITE_TIME_ZONE.
+Every HTTP route is anonymous at the host (``AuthLevel.ANONYMOUS``, also the
+app default here): authentication is the job of core.auth's access-level
+decorators, which validate the Entra access token and fail closed. A function
+key would add nothing a client can keep secret.
+
+Heavy imports (the harvest's httpx and trafilatura, and from Phase 2 numpy and
+openai) stay inside the handlers that need them, so an HTTP cold start does
+not pay for them. Schedules are UTC: Flex Consumption does not support
+WEBSITE_TIME_ZONE.
 """
 
 from __future__ import annotations
 
-import json
 import logging
-import os
-from typing import Any
 
 import azure.functions as func
 
-from core.models import iso, utcnow
+from api import account, admin, public
+from jobs import queues, timers
 
-app = func.FunctionApp()
-log = logging.getLogger(__name__)
+app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 # Third-party loggers that speak at INFO on every request. The Functions worker
 # forwards whatever the root logger lets through, and one busy harvest's worth
@@ -70,81 +72,8 @@ _QUIET_LOGGERS = {
 for _name, _level in _QUIET_LOGGERS.items():
     logging.getLogger(_name).setLevel(_level)
 
-
-def _json(payload: dict[str, Any], status: int = 200) -> func.HttpResponse:
-    return func.HttpResponse(
-        json.dumps(payload, ensure_ascii=False, default=str),
-        status_code=status,
-        mimetype="application/json",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Health
-# ---------------------------------------------------------------------------
-# Version of the HTTP contract this backend serves; docs/api.md (Phase 1)
-# defines it.
-API_VERSION = 1
-
-
-def _min_supported_build() -> int:
-    """The oldest iOS build the backend still serves; 0 means every build.
-
-    Unset until Phase 1's settings manifest adds MIN_SUPPORTED_BUILD. A value
-    that is not an integer degrades to 0 with a warning instead of failing the
-    request: a typo in an app setting must not turn the one public route into a
-    500, and an unparsable floor cannot be enforced anyway.
-    """
-    raw = os.environ.get("MIN_SUPPORTED_BUILD", "").strip()
-    if not raw:
-        return 0
-    try:
-        return int(raw)
-    except ValueError:
-        log.warning("MIN_SUPPORTED_BUILD=%r is not an integer; serving minBuild=0", raw)
-        return 0
-
-
-@app.route(route="health", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
-def health(req: func.HttpRequest) -> func.HttpResponse:
-    """Static liveness: the host is up, and which contract it speaks. No I/O.
-
-    This used to read and query Cosmos, because during the 2026-08-02 outage a
-    point-read-only check answered "healthy" on 3 of 8 probes with the whole
-    app down. That made the check honest but put the wrong thing on an
-    *anonymous* route: every unauthenticated hit spent ~3-4 RU of the free
-    tier's 1,000 RU/s that harvest shares, and the response carried the model
-    deployment names and, on failure, the raw exception text, to anyone who
-    asked.
-
-    Dependency health now lives where only the operator can trigger it: the
-    ``pipeline-silent`` alert on successful harvest runs, and from Phase 1 the
-    admin health route. This endpoint touches no settings object, no Cosmos and
-    no network, so it has nothing to fail on and nothing to echo.
-    """
-    return _json(
-        {
-            "status": "ok",
-            "api": API_VERSION,
-            "minBuild": _min_supported_build(),
-            "time": iso(utcnow()),
-        }
-    )
-
-
-# ---------------------------------------------------------------------------
-# Harvest
-# ---------------------------------------------------------------------------
-@app.timer_trigger(
-    schedule="%HARVEST_SCHEDULE%",
-    arg_name="timer",
-    run_on_startup=False,
-    use_monitor=True,
-)
-def harvest_timer(timer: func.TimerRequest) -> None:
-    from pipeline.harvest import run_harvest
-
-    if timer.past_due:
-        log.warning("Harvest timer is past due")
-    record = run_harvest()
-    log.info("Harvest run %s: %d new items", record.id, record.items_new)
+app.register_blueprint(public.bp)
+app.register_blueprint(account.bp)
+app.register_blueprint(admin.bp)
+app.register_blueprint(timers.bp)
+app.register_blueprint(queues.bp)
