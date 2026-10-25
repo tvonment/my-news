@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminSourcePatch.schema.json",
+  "title": "AdminSourcePatch",
+  "description": "Draft (Phase 2; not registered before then). PATCH /admin/catalog/{id}. A downgrade of tier or of aiPolicy.summarize/translate withdraws the source's summaries and republishes the pool.",
+  "x-phase": "P2",
+  "type": "object",
+  "required": [],
+  "properties": {
+    "tier": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Tier"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "aiPolicy": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "embed": {
+          "type": "boolean"
+        },
+        "classify": {
+          "type": "boolean"
+        },
+        "fulltext": {
+          "type": "boolean"
+        },
+        "summarize": {
+          "type": "boolean"
+        },
+        "translate": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "legal": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "basis": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidenceUrl": {
+          "anyOf": [
+            {
+              "$ref": "Common.schema.json#/$defs/Url"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkedAt": {
+          "anyOf": [
+            {
+              "$ref": "Common.schema.json#/$defs/Date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "flags": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "paywallHeavy": {
+          "type": "boolean"
+        },
+        "satire": {
+          "type": "boolean"
+        },
+        "rumour": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "active",
+        "paused",
+        "retired"
+      ]
+    },
+    "defaultOn": {
+      "type": "boolean"
+    },
+    "teaserMax": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1500
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "minProperties": 1,
+  "examples": [
+    {
+      "tier": "C",
+      "aiPolicy": {
+        "summarize": false,
+        "translate": false
+      },
+      "legal": {
+        "note": "TDM reservation in robots.txt and terms; headline only."
+      }
+    }
+  ]
+}

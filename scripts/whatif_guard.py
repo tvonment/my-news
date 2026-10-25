@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop an `azd provision` whose what-if would cost money or lose data.
 
-    whatif_guard.py <what-if.json>
+    whatif_guard.py <what-if.json> [--live-settings <names.json>]
     az deployment sub what-if ... --no-pretty-print -o json | whatif_guard.py
 
 Reads the JSON that `az deployment sub what-if --no-pretty-print -o json`
@@ -15,6 +15,11 @@ To accept a blocked change on purpose, name its rule (comma-separate several):
 
 An allowed rule still prints, as "allowed", so the log keeps what was waved
 through and what it would otherwise have stopped.
+
+--live-settings names a JSON list of the app's current setting names, as
+`az functionapp config appsettings list --query '[].name' -o json` prints them
+(whatif.sh passes it once the app exists). What-if can't read app settings, so
+without it the app-settings-removed rule has nothing to compare and says so.
 
 Exit status: 0 nothing blocks; 1 a rule blocks; 2 the input can't be judged
 (not what-if JSON, or the what-if itself failed). 2 stops the hook too: a
@@ -60,6 +65,7 @@ COSMOS_THROUGHPUT = (COSMOS_DATABASE + "/throughputsettings", COSMOS_CONTAINER +
 FOUNDRY_DEPLOYMENT = "microsoft.cognitiveservices/accounts/deployments"
 FUNCTION_APP = "microsoft.web/sites"
 FUNCTION_PLAN = "microsoft.web/serverfarms"
+APP_CONFIG = FUNCTION_APP + "/config"
 
 FREE_TIER = "properties.enableFreeTier"
 LOCATIONS = "properties.locations"
@@ -68,10 +74,16 @@ BACKUP = "properties.backupPolicy"
 PARTITION_KEY = "properties.resource.partitionKey"
 VECTOR_POLICY = "properties.resource.vectorEmbeddingPolicy"
 ALWAYS_READY = "properties.functionAppConfig.scaleAndConcurrency.alwaysReady"
+SITE_APP_SETTINGS = "properties.siteConfig.appSettings"
 
 FREE_TIER_RU = 1000
 FOUNDRY_SKUS = ("GlobalStandard", "DataZoneStandard", "Standard")
 FLEX_PLAN_SKU = "FC1"
+
+# App settings a provision may remove without a block. A name goes here in the
+# commit that takes it out of infra/modules/appsettings.bicep, once nothing
+# reads it any more. Compared case-insensitively, as App Service compares them.
+REMOVABLE_SETTINGS: frozenset = frozenset()
 
 # How many changed paths a summary line shows before it says "+N more".
 MAX_PATHS = 8
@@ -302,15 +314,16 @@ class Rule(NamedTuple):
     id: str
     why: str
     watches: tuple  # resource types it reads; empty means every type
-    check: Callable[[list, Callable[[str], None]], list]
+    check: Callable[..., list]
+    live: bool = False  # the check also takes the live app setting names (or None)
 
 
 RULES: list[Rule] = []
 
 
-def rule(rule_id: str, why: str, *watches: str) -> Callable:
+def rule(rule_id: str, why: str, *watches: str, live: bool = False) -> Callable:
     def register(check: Callable) -> Callable:
-        RULES.append(Rule(rule_id, why, tuple(watches), check))
+        RULES.append(Rule(rule_id, why, tuple(watches), check, live))
         return check
     return register
 
@@ -672,6 +685,58 @@ def _plan_sku(changes: list[Change], warn: Callable[[str], None]) -> list[str]:
     return found
 
 
+@rule("app-settings-removed", "the settings manifest (appsettings.bicep) replaces the app's whole list, so a "
+                              "setting it leaves out is deleted from the live app, value and all",
+      FUNCTION_APP, APP_CONFIG, live=True)
+def _settings_removed(changes: list[Change], warn: Callable[[str], None], live: list[str] | None) -> list[str]:
+    # What-if can't see app settings: ARM serves them only through a list
+    # action, so the settings resource's "before" is empty and every setting
+    # reads as new. whatif.sh therefore lists the live names itself (names
+    # only) and passes them in. Without this, a setting added by hand (the
+    # portal, or the runbook's `az functionapp config appsettings set`
+    # rollbacks) would vanish on the next provision without a word. Only
+    # names are read and printed here: the after-state holds the values in the
+    # clear, connection strings included.
+    writers = [c for c in changes
+               if (c.type == APP_CONFIG and c.resource_id.lower().endswith("/config/appsettings"))
+               or (c.type == FUNCTION_APP and get(c.after, SITE_APP_SETTINGS) is not None)]
+    if not writers:
+        return []  # nothing in this provision replaces the settings
+    if live is None:
+        warn("app-settings-removed: not checked, no live setting names were given "
+             "(whatif.sh passes --live-settings once the app exists)")
+        return []
+    found = []
+    kept: set = set()
+    wrote = False
+    for c in writers:
+        if c.change_type == "Unsupported":
+            # Fail closed: an unevaluated settings resource may drop anything.
+            found.append(f"{c.label}: what-if could not evaluate it "
+                         f"({c.unsupported_reason or 'no reason given'}), so a removal can't be ruled out")
+            continue
+        if not c.writes:
+            continue
+        if c.type == APP_CONFIG:
+            props = get(c.after, "properties")
+            names = list(props) if isinstance(props, dict) else None
+        else:
+            listed = get(c.after, SITE_APP_SETTINGS)
+            names = [get(s, "name") for s in listed] if isinstance(listed, list) else None
+        if names is None or not all(isinstance(n, str) for n in names):
+            found.append(f"{c.label}: the setting names it writes can't be read from the what-if")
+            continue
+        wrote = True
+        kept.update(n.lower() for n in names)
+    if wrote:
+        removable = {n.lower() for n in REMOVABLE_SETTINGS}
+        for name in sorted(set(live), key=str.lower):
+            if name.lower() not in kept and name.lower() not in removable:
+                found.append(f"{name}: set on the app now and missing from the template, so this provision "
+                             f"deletes it")
+    return found
+
+
 RULE_IDS = tuple(r.id for r in RULES)
 
 
@@ -684,14 +749,18 @@ def parse_allow(raw: str | None) -> frozenset:
 
 
 class Report:
-    def __init__(self, changes: list[Change], diagnostics: list[dict], allow: frozenset) -> None:
+    def __init__(self, changes: list[Change], diagnostics: list[dict], allow: frozenset,
+                 live_settings: list[str] | None = None) -> None:
         self.changes = changes
         self.diagnostics = diagnostics
         self.allow = frozenset(allow)
         self.warnings: list[str] = []
         self.findings: dict[str, list[str]] = {}
         for r in RULES:
-            found = r.check(changes, self.warnings.append)
+            if r.live:
+                found = r.check(changes, self.warnings.append, live_settings)
+            else:
+                found = r.check(changes, self.warnings.append)
             if found:
                 self.findings[r.id] = found
         fired = [r.id for r in RULES if r.id in self.findings]
@@ -779,10 +848,22 @@ def _named(leaf: Leaf) -> str:
     return ""
 
 
-def evaluate(document: Any, allow: frozenset = frozenset()) -> Report:
+def evaluate(document: Any, allow: frozenset = frozenset(), live_settings: list[str] | None = None) -> Report:
     """Judge a parsed what-if result. Raises InputError if it can't be judged."""
     changes, diagnostics = load(document)
-    return Report(changes, diagnostics, allow)
+    return Report(changes, diagnostics, allow, live_settings)
+
+
+def load_live_settings(text: str) -> list[str]:
+    """The app's current setting names from --live-settings, or InputError."""
+    try:
+        names = json.loads(text)
+    except ValueError as exc:
+        raise InputError(f"--live-settings: not JSON ({exc})") from None
+    if not isinstance(names, list) or not all(isinstance(n, str) and n for n in names):
+        raise InputError("--live-settings: expected a JSON list of setting names, as "
+                         "`az functionapp config appsettings list --query '[].name' -o json` prints them")
+    return names
 
 
 def _read(source: str) -> str:
@@ -803,7 +884,14 @@ def main(argv: list[str] | None = None, environ: Any = None) -> int:
     if args and args[0] in ("-h", "--help"):
         print(__doc__)
         return 0
-    if len(args) > 1:
+    live_path = None
+    if "--live-settings" in args:
+        at = args.index("--live-settings")
+        live_path = args[at + 1] if at + 1 < len(args) else None
+        del args[at:at + 2]
+        if live_path is None or live_path == "-":
+            args.append("--live-settings")  # no file named: a usage error below
+    if len(args) > 1 or (args and args[0].startswith("--")):
         print("usage:\n" + __doc__.split("\n\n")[1], file=sys.stderr)
         return 2
     try:
@@ -812,7 +900,8 @@ def main(argv: list[str] | None = None, environ: Any = None) -> int:
             document = json.loads(text)
         except ValueError as exc:
             raise InputError(f"not JSON ({exc})") from None
-        report = evaluate(document, parse_allow(environ.get("WHATIF_ALLOW", "")))
+        live = load_live_settings(_read(live_path)) if live_path is not None else None
+        report = evaluate(document, parse_allow(environ.get("WHATIF_ALLOW", "")), live)
     except (InputError, OSError, UnicodeDecodeError) as exc:
         print(f"whatif_guard: {exc}", file=sys.stderr)
         return 2

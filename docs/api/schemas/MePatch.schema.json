@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/MePatch.schema.json",
+  "title": "MePatch",
+  "description": "PATCH /me request. Whitelist: locale, languages, timeZone, settings.*, consent.aiProcessing, onboarding.completed. Unknown fields are 400 validation_failed (unknown_field).",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [],
+  "properties": {
+    "locale": {
+      "$ref": "Common.schema.json#/$defs/Locale"
+    },
+    "languages": {
+      "$ref": "Common.schema.json#/$defs/Languages"
+    },
+    "timeZone": {
+      "$ref": "Common.schema.json#/$defs/TimeZone"
+    },
+    "settings": {
+      "$ref": "Common.schema.json#/$defs/SettingsPatch"
+    },
+    "consent": {
+      "type": "object",
+      "required": [
+        "aiProcessing"
+      ],
+      "properties": {
+        "aiProcessing": {
+          "type": "object",
+          "required": [
+            "granted",
+            "version"
+          ],
+          "properties": {
+            "granted": {
+              "type": "boolean"
+            },
+            "version": {
+              "$ref": "Common.schema.json#/$defs/ConsentVersion"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "onboarding": {
+      "type": "object",
+      "required": [
+        "completed"
+      ],
+      "properties": {
+        "completed": {
+          "type": "boolean",
+          "description": "true stamps completedAt once; false clears it."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "minProperties": 1,
+  "examples": [
+    {
+      "timeZone": "Europe/Zurich",
+      "languages": [
+        "de"
+      ],
+      "settings": {
+        "briefSize": 15,
+        "editions": [
+          "morning",
+          "evening"
+        ]
+      },
+      "consent": {
+        "aiProcessing": {
+          "granted": true,
+          "version": "2026-10"
+        }
+      },
+      "onboarding": {
+        "completed": true
+      }
+    },
+    {
+      "settings": {
+        "historyRetentionDays": 30
+      }
+    }
+  ]
+}

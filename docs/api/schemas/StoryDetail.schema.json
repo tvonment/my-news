@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/StoryDetail.schema.json",
+  "title": "StoryDetail",
+  "description": "Draft (Phase 3; not registered before then). GET /stories/{id}. summary is Tier-A AI text in the member's locale, labelled on the client \"Summary by AI from N outlets\" with N = outletsUsed.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "story",
+    "summary",
+    "coverage",
+    "entities",
+    "reasons"
+  ],
+  "properties": {
+    "story": {
+      "$ref": "StoryCard.schema.json"
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "lang",
+            "bullets",
+            "outletsUsed",
+            "generatedAt"
+          ],
+          "properties": {
+            "lang": {
+              "$ref": "Common.schema.json#/$defs/SourceLanguage"
+            },
+            "bullets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "minItems": 1,
+              "maxItems": 3
+            },
+            "outletsUsed": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "generatedAt": {
+              "$ref": "Common.schema.json#/$defs/Timestamp"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "publisher",
+          "title",
+          "url",
+          "lang",
+          "publishedAt",
+          "paywalled"
+        ],
+        "properties": {
+          "publisher": {
+            "$ref": "Common.schema.json#/$defs/PublisherRef"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "url": {
+            "$ref": "Common.schema.json#/$defs/Url"
+          },
+          "lang": {
+            "$ref": "Common.schema.json#/$defs/SourceLanguage"
+          },
+          "publishedAt": {
+            "$ref": "Common.schema.json#/$defs/Timestamp"
+          },
+          "paywalled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 30
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      },
+      "maxItems": 5
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "$ref": "Common.schema.json#/$defs/DetailReason"
+      },
+      "maxItems": 6
+    }
+  },
+  "additionalProperties": false
+}

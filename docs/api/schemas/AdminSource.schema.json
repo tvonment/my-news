@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminSource.schema.json",
+  "title": "AdminSource",
+  "description": "Draft (Phase 2; not registered before then). One catalog source as admins see it. legal.note is the free-text remark recording why a feed may not be used with AI; flags.aiReserved is derived (Tier C).",
+  "x-phase": "P2",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "feedUrl",
+    "homepage",
+    "lang",
+    "country",
+    "section",
+    "tags",
+    "kind",
+    "family",
+    "authority",
+    "tier",
+    "aiPolicy",
+    "legal",
+    "flags",
+    "status",
+    "defaultOn",
+    "teaserMax",
+    "subscriberCount",
+    "health"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "Common.schema.json#/$defs/Slug"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "feedUrl": {
+      "$ref": "Common.schema.json#/$defs/Url"
+    },
+    "homepage": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Url"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lang": {
+      "$ref": "Common.schema.json#/$defs/SourceLanguage"
+    },
+    "country": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z]{2}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "section": {
+      "$ref": "Common.schema.json#/$defs/SectionId"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "$ref": "Common.schema.json#/$defs/Slug"
+      },
+      "maxItems": 10
+    },
+    "kind": {
+      "$ref": "Common.schema.json#/$defs/SourceKind"
+    },
+    "family": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Slug"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "authority": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "tier": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Tier"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "aiPolicy": {
+      "type": "object",
+      "required": [
+        "embed",
+        "classify",
+        "fulltext",
+        "summarize",
+        "translate"
+      ],
+      "properties": {
+        "embed": {
+          "type": "boolean"
+        },
+        "classify": {
+          "type": "boolean"
+        },
+        "fulltext": {
+          "type": "boolean"
+        },
+        "summarize": {
+          "type": "boolean"
+        },
+        "translate": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "legal": {
+      "type": "object",
+      "required": [
+        "basis",
+        "evidenceUrl",
+        "checkedAt",
+        "note"
+      ],
+      "properties": {
+        "basis": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidenceUrl": {
+          "anyOf": [
+            {
+              "$ref": "Common.schema.json#/$defs/Url"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkedAt": {
+          "anyOf": [
+            {
+              "$ref": "Common.schema.json#/$defs/Date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "flags": {
+      "type": "object",
+      "required": [
+        "paywallHeavy",
+        "satire",
+        "rumour",
+        "aiReserved"
+      ],
+      "properties": {
+        "paywallHeavy": {
+          "type": "boolean"
+        },
+        "satire": {
+          "type": "boolean"
+        },
+        "rumour": {
+          "type": "boolean"
+        },
+        "aiReserved": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "active",
+        "paused",
+        "retired"
+      ]
+    },
+    "defaultOn": {
+      "type": "boolean"
+    },
+    "teaserMax": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1500
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "subscriberCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "health": {
+      "type": "object",
+      "required": [
+        "lastFetchAt",
+        "lastSuccessAt",
+        "consecutiveFailures",
+        "itemsLast24h"
+      ],
+      "properties": {
+        "lastFetchAt": {
+          "anyOf": [
+            {
+              "$ref": "Common.schema.json#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastSuccessAt": {
+          "anyOf": [
+            {
+              "$ref": "Common.schema.json#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "consecutiveFailures": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "itemsLast24h": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/Redeem.schema.json",
+  "title": "Redeem",
+  "description": "POST /me/redeem request. The code is normalised server-side (upper-case; spaces and dashes removed; O->0, I/L->1); anything that is not then 12 Crockford symbols is 400 invite_malformed.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "code"
+  ],
+  "properties": {
+    "code": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "code": "K7QM-2HXA-9RTV"
+    },
+    {
+      "code": "k7qm 2hxa 9rtv"
+    }
+  ]
+}

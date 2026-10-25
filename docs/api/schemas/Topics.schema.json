@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/Topics.schema.json",
+  "title": "Topics",
+  "description": "Draft (Phase 3; not registered before then). GET /topics (ETag): the two-level vocabulary in the member's locale, with follow/mute state, own statements and what MyNews has learned.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "vocabVersion",
+    "sections",
+    "statements",
+    "learned"
+  ],
+  "properties": {
+    "vocabVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "description",
+          "state",
+          "mutedUntil",
+          "tags"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "Common.schema.json#/$defs/SectionId"
+          },
+          "label": {
+            "$ref": "Common.schema.json#/$defs/Label"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "Common.schema.json#/$defs/FollowState"
+          },
+          "mutedUntil": {
+            "anyOf": [
+              {
+                "$ref": "Common.schema.json#/$defs/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "label",
+                "state",
+                "mutedUntil"
+              ],
+              "properties": {
+                "id": {
+                  "$ref": "Common.schema.json#/$defs/Slug"
+                },
+                "label": {
+                  "$ref": "Common.schema.json#/$defs/Label"
+                },
+                "state": {
+                  "$ref": "Common.schema.json#/$defs/FollowState"
+                },
+                "mutedUntil": {
+                  "anyOf": [
+                    {
+                      "$ref": "Common.schema.json#/$defs/Timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "maxItems": 240
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 9
+    },
+    "statements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 10
+    },
+    "learned": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "tag",
+          "strength"
+        ],
+        "properties": {
+          "tag": {
+            "$ref": "Common.schema.json#/$defs/Ref"
+          },
+          "strength": {
+            "enum": [
+              "often",
+              "sometimes"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 30
+    }
+  },
+  "additionalProperties": false
+}

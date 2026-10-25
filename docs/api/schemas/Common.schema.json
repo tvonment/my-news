@@ -1,0 +1,638 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/Common.schema.json",
+  "title": "Common",
+  "description": "Shared definitions for the MyNews v2 API (docs/api.md). Referenced as Common.schema.json#/$defs/<Name>.",
+  "x-phase": "P1",
+  "$defs": {
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "description": "Every timestamp the server sends: UTC, seconds precision, Z."
+    },
+    "InputTimestamp": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "format": "date-time",
+      "description": "A client-sent RFC 3339 timestamp with any offset; normalised to UTC and truncated to seconds."
+    },
+    "Date": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "Oid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Entra object id, lower case."
+    },
+    "Uid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "description": "HMAC-SHA256(MYNEWS_HMAC_KEY, oid), first 32 hex."
+    },
+    "InviteId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "description": "sha256(\"mynews-invite:\" + normalised code), first 32 hex."
+    },
+    "InviteCode": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$",
+      "description": "12 Crockford Base32 symbols, shown XXXX-XXXX-XXXX. Returned once, when minted."
+    },
+    "SuggestionId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "Uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "StoryId": {
+      "type": "string",
+      "pattern": "^s\\d{8}[A-Za-z0-9_-]{12}$"
+    },
+    "EditionId": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}\\.(morning|midday|evening)$"
+    },
+    "Slot": {
+      "enum": [
+        "morning",
+        "midday",
+        "evening"
+      ]
+    },
+    "Slug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "SectionId": {
+      "enum": [
+        "switzerland",
+        "world",
+        "business",
+        "technology",
+        "ai",
+        "software",
+        "security",
+        "science",
+        "climate"
+      ]
+    },
+    "Locale": {
+      "enum": [
+        "en",
+        "de-CH"
+      ]
+    },
+    "Language": {
+      "enum": [
+        "de",
+        "en"
+      ],
+      "description": "A content language a member can choose."
+    },
+    "SourceLanguage": {
+      "type": "string",
+      "pattern": "^[a-z]{2}$",
+      "description": "ISO 639-1 language of a source or article."
+    },
+    "Languages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Language"
+      },
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true
+    },
+    "TimeZone": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_+\\-]+(/[A-Za-z0-9_+\\-]+)*$",
+      "description": "IANA time-zone name."
+    },
+    "ConsentVersion": {
+      "type": "string",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+      "description": "YYYY-MM of the consent text."
+    },
+    "Url": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "format": "uri",
+      "pattern": "^https?://"
+    },
+    "Cursor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "Opaque. Pass back verbatim."
+    },
+    "Tier": {
+      "enum": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    "ContentType": {
+      "enum": [
+        "report",
+        "analysis",
+        "opinion",
+        "explainer",
+        "review",
+        "official",
+        "rumour",
+        "satire",
+        "live",
+        "sponsored"
+      ]
+    },
+    "SourceKind": {
+      "enum": [
+        "newsroom",
+        "wire",
+        "blog",
+        "official",
+        "rumour",
+        "satire"
+      ]
+    },
+    "MemberStatus": {
+      "enum": [
+        "active",
+        "blocked",
+        "deleting"
+      ]
+    },
+    "DeletionStatus": {
+      "enum": [
+        "purging",
+        "awaiting_identity_removal",
+        "completed"
+      ]
+    },
+    "IdentityMode": {
+      "enum": [
+        "manual",
+        "graph"
+      ]
+    },
+    "FollowState": {
+      "enum": [
+        "follow",
+        "neutral",
+        "mute"
+      ]
+    },
+    "SourceState": {
+      "enum": [
+        "subscribed",
+        "removed",
+        "paused",
+        "neutral"
+      ]
+    },
+    "SuggestionStatus": {
+      "enum": [
+        "checking",
+        "pending_review",
+        "already_in_catalog",
+        "not_a_feed",
+        "unreachable",
+        "blocked",
+        "failed",
+        "approved",
+        "rejected"
+      ]
+    },
+    "ReportKind": {
+      "enum": [
+        "summary_wrong",
+        "summary_offensive",
+        "satire_unlabelled",
+        "broken_link",
+        "duplicate",
+        "other"
+      ]
+    },
+    "ErrorCode": {
+      "enum": [
+        "validation_failed",
+        "invite_malformed",
+        "unauthenticated",
+        "invalid_token",
+        "invite_required",
+        "account_blocked",
+        "admin_required",
+        "consent_required",
+        "not_found",
+        "invite_not_found",
+        "invite_used",
+        "invite_expired",
+        "duplicate",
+        "limit_reached",
+        "state_conflict",
+        "account_deleted",
+        "payload_too_large",
+        "unsupported_media_type",
+        "quota_exceeded",
+        "internal",
+        "auth_unavailable",
+        "degraded"
+      ]
+    },
+    "ValidationReason": {
+      "enum": [
+        "required",
+        "type",
+        "enum",
+        "format",
+        "range",
+        "length",
+        "unknown_field",
+        "duplicate",
+        "self",
+        "invalid_json",
+        "not_object",
+        "empty"
+      ]
+    },
+    "QuotaKey": {
+      "enum": [
+        "redeem",
+        "export",
+        "feedback",
+        "describe",
+        "reports",
+        "suggestions"
+      ]
+    },
+    "CheckError": {
+      "enum": [
+        "timeout",
+        "unavailable",
+        "forbidden",
+        "not_found",
+        "throttled",
+        "misconfigured",
+        "failed"
+      ]
+    },
+    "ReasonCode": {
+      "enum": [
+        "follow_section",
+        "follow_tag",
+        "subscribed_source",
+        "similar_to_likes",
+        "coverage",
+        "must_know",
+        "something_different",
+        "update",
+        "not_in_your_sources"
+      ]
+    },
+    "Label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "Ref": {
+      "type": "object",
+      "required": [
+        "id",
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Slug"
+        },
+        "label": {
+          "$ref": "#/$defs/Label"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SectionRef": {
+      "type": "object",
+      "required": [
+        "id",
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SectionId"
+        },
+        "label": {
+          "$ref": "#/$defs/Label"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PublisherRef": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Slug"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "additionalProperties": false
+    },
+    "TopicTarget": {
+      "type": "object",
+      "required": [
+        "type",
+        "id",
+        "label"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "section",
+            "tag",
+            "source"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/Slug"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "additionalProperties": false
+    },
+    "ReasonBase": {
+      "type": "object",
+      "required": [
+        "code",
+        "target",
+        "count"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ReasonCode"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TopicTarget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Reason": {
+      "$ref": "#/$defs/ReasonBase",
+      "unevaluatedProperties": false
+    },
+    "DetailReason": {
+      "$ref": "#/$defs/ReasonBase",
+      "required": [
+        "control"
+      ],
+      "properties": {
+        "control": {
+          "type": "object",
+          "required": [
+            "action",
+            "target"
+          ],
+          "properties": {
+            "action": {
+              "enum": [
+                "unfollow",
+                "unmute",
+                "mute",
+                "pause_source",
+                "remove_source",
+                "add_source",
+                "less_like_this"
+              ]
+            },
+            "target": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TopicTarget"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "Settings": {
+      "type": "object",
+      "required": [
+        "briefSize",
+        "editions",
+        "somethingDifferent",
+        "emphasis",
+        "openInReader",
+        "summaryInList",
+        "personalisedRanking",
+        "historyRetentionDays"
+      ],
+      "properties": {
+        "briefSize": {
+          "enum": [
+            10,
+            12,
+            15
+          ],
+          "description": "Short / Standard / Long. Default 12."
+        },
+        "editions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Slot"
+          },
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "description": "Default all three."
+        },
+        "somethingDifferent": {
+          "type": "boolean",
+          "description": "Default true."
+        },
+        "emphasis": {
+          "enum": [
+            "interests",
+            "balanced",
+            "big_stories"
+          ],
+          "description": "\"What matters more?\" Default balanced."
+        },
+        "openInReader": {
+          "type": "boolean",
+          "description": "Default false."
+        },
+        "summaryInList": {
+          "type": "boolean",
+          "description": "Default true."
+        },
+        "personalisedRanking": {
+          "type": "boolean",
+          "description": "Default true."
+        },
+        "historyRetentionDays": {
+          "enum": [
+            30,
+            90,
+            180
+          ],
+          "description": "TTL of new open and dwell signals. Default 90."
+        }
+      },
+      "additionalProperties": false
+    },
+    "SettingsPatch": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "briefSize": {
+          "enum": [
+            10,
+            12,
+            15
+          ],
+          "description": "Short / Standard / Long. Default 12."
+        },
+        "editions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Slot"
+          },
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "description": "Default all three."
+        },
+        "somethingDifferent": {
+          "type": "boolean",
+          "description": "Default true."
+        },
+        "emphasis": {
+          "enum": [
+            "interests",
+            "balanced",
+            "big_stories"
+          ],
+          "description": "\"What matters more?\" Default balanced."
+        },
+        "openInReader": {
+          "type": "boolean",
+          "description": "Default false."
+        },
+        "summaryInList": {
+          "type": "boolean",
+          "description": "Default true."
+        },
+        "personalisedRanking": {
+          "type": "boolean",
+          "description": "Default true."
+        },
+        "historyRetentionDays": {
+          "enum": [
+            30,
+            90,
+            180
+          ],
+          "description": "TTL of new open and dwell signals. Default 90."
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "Consent": {
+      "type": "object",
+      "required": [
+        "aiProcessing"
+      ],
+      "properties": {
+        "aiProcessing": {
+          "type": "object",
+          "required": [
+            "granted",
+            "version"
+          ],
+          "properties": {
+            "granted": {
+              "type": "boolean"
+            },
+            "version": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsentVersion"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "description": "version is null until the member has answered."
+        }
+      },
+      "additionalProperties": false
+    },
+    "RunSummary": {
+      "type": "object",
+      "required": [
+        "at",
+        "ok"
+      ],
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "ok": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

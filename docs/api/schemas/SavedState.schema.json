@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/SavedState.schema.json",
+  "title": "SavedState",
+  "description": "Draft (Phase 3; not registered before then). PUT /me/saved/{id} response. Saving again keeps the first savedAt.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "storyId",
+    "saved",
+    "savedAt"
+  ],
+  "properties": {
+    "storyId": {
+      "$ref": "Common.schema.json#/$defs/StoryId"
+    },
+    "saved": {
+      "const": true
+    },
+    "savedAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    }
+  },
+  "additionalProperties": false
+}

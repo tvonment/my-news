@@ -5,11 +5,8 @@ param resourceToken string
 param storageAccountName string
 param deploymentContainerName string
 param cosmosAccountName string
-param cosmosDatabaseName string
-param cosmosContainerName string
 @description('Foundry account the Function identity may call. Nothing calls a model between Phase 0 and Phase 2; the grant stays so Phase 2 needs no new one.')
 param foundryAccountName string
-param appInsightsConnectionString string
 
 @description('Developer object ID, granted Cosmos data-plane read/write so you can inspect data locally. Empty skips the assignment.')
 param developerPrincipalId string = ''
@@ -21,9 +18,6 @@ param instanceMemoryMB int = 512
 @description('Ceiling on concurrent instances: the runaway-cost brake for everything that is not a model call. This Visual Studio credit subscription gets no free grant, so every execution bills, including a request the app rejects (from Phase 1 a bad token gets its 401 from inside the function, which is still an execution). A flood therefore costs in proportion to how far the app can scale out: at 512 MB, 5 instances flat out are 216,000 GB-s a day, a quarter of what the old cap of 20 allowed. Phase 3\'s load check settles the final value, the smallest one that passes.')
 @minValue(1)
 param maximumInstanceCount int = 5
-
-@description('Harvest cadence. Frequent and cheap (no LLM). Needed because The Verge, NPR and the Microsoft blogs only carry 10 feed items — a 3x/day crawl would silently drop stories.')
-param harvestSchedule string = '0 */30 * * * *'
 
 var functionAppName = 'func-mynews-${resourceToken}'
 
@@ -86,44 +80,14 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
         version: '3.12'
       }
     }
+    // No appSettings here: every setting lives in appsettings.bicep, a
+    // sites/config resource that main.bicep deploys after this module. Two
+    // writers of one collection would each replace what the other wrote, so
+    // the list moved out of the site whole. A site PUT without the array
+    // leaves the settings as they are.
     siteConfig: {
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
-      // This array is the WHOLE set: every provision replaces the app's settings
-      // with exactly these, so a setting added by hand in the portal is wiped,
-      // and one removed here disappears from the live app.
-      //
-      // Phase 0 retired v1's digest and profile runs and removed the settings
-      // only they read: FOUNDRY_ENDPOINT, MODEL_*, REASONING_EFFORT_*,
-      // DIGEST_SCHEDULE, PROFILE_SCHEDULE, DAILY_TOKEN_BUDGET_USD and
-      // PUSH_ENABLED. core/config.py keeps a default for each, so code that
-      // still reads them behaves as before.
-      appSettings: [
-        {
-          name: 'AzureWebJobsStorage__accountName'
-          value: storage.name
-        }
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: appInsightsConnectionString
-        }
-        {
-          name: 'COSMOS_ENDPOINT'
-          value: cosmos.properties.documentEndpoint
-        }
-        {
-          name: 'COSMOS_DATABASE'
-          value: cosmosDatabaseName
-        }
-        {
-          name: 'COSMOS_CONTAINER'
-          value: cosmosContainerName
-        }
-        {
-          name: 'HARVEST_SCHEDULE'
-          value: harvestSchedule
-        }
-      ]
     }
   }
 }

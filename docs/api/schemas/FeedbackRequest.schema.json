@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/FeedbackRequest.schema.json",
+  "title": "FeedbackRequest",
+  "description": "Draft (Phase 3; not registered before then). POST /me/feedback: 1-50 events with client UUIDs. undo retracts an event already sent (targetEventId). at must lie within [now - 7 d, now + 5 min].",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "events"
+  ],
+  "properties": {
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "storyId",
+          "signal",
+          "at"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "Common.schema.json#/$defs/Uuid"
+          },
+          "storyId": {
+            "$ref": "Common.schema.json#/$defs/StoryId"
+          },
+          "signal": {
+            "enum": [
+              "open",
+              "dwell",
+              "more",
+              "less",
+              "hide",
+              "undo"
+            ]
+          },
+          "at": {
+            "$ref": "Common.schema.json#/$defs/InputTimestamp"
+          },
+          "editionId": {
+            "anyOf": [
+              {
+                "$ref": "Common.schema.json#/$defs/EditionId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dwellMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3600000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetEventId": {
+            "anyOf": [
+              {
+                "$ref": "Common.schema.json#/$defs/Uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "signal": {
+                  "const": "dwell"
+                }
+              },
+              "required": [
+                "signal"
+              ]
+            },
+            "then": {
+              "required": [
+                "dwellMs"
+              ],
+              "properties": {
+                "dwellMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3600000
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "signal": {
+                  "const": "undo"
+                }
+              },
+              "required": [
+                "signal"
+              ]
+            },
+            "then": {
+              "required": [
+                "targetEventId"
+              ],
+              "properties": {
+                "targetEventId": {
+                  "$ref": "Common.schema.json#/$defs/Uuid"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 50
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "events": [
+        {
+          "id": "0b7e3c1a-5d2f-4e8b-9a6c-1f3e5d7b9a2c",
+          "storyId": "s20261021Ab3dE_gH1jKl",
+          "signal": "open",
+          "at": "2026-10-21T06:01:12Z",
+          "editionId": "2026-10-21.morning",
+          "position": 3
+        },
+        {
+          "id": "2c9d4e6f-7a8b-4c1d-8e2f-3a4b5c6d7e8f",
+          "storyId": "s20261021Ab3dE_gH1jKl",
+          "signal": "dwell",
+          "at": "2026-10-21T06:01:40Z",
+          "dwellMs": 28000
+        },
+        {
+          "id": "5e1f2a3b-4c5d-4e6f-9a0b-1c2d3e4f5a6b",
+          "storyId": "s20261021Ab3dE_gH1jKl",
+          "signal": "undo",
+          "at": "2026-10-21T06:02:00Z",
+          "targetEventId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+        }
+      ]
+    }
+  ]
+}

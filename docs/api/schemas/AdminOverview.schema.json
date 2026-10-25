@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminOverview.schema.json",
+  "title": "AdminOverview",
+  "description": "GET /admin/overview. spend (Phase 2), suggestions and reports (Phase 3) are null until their phase; pipeline.lastCycle is null until Phase 2.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "generatedAt",
+    "users",
+    "invites",
+    "deletions",
+    "pipeline",
+    "secrets",
+    "spend",
+    "suggestions",
+    "reports"
+  ],
+  "properties": {
+    "generatedAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "users": {
+      "type": "object",
+      "required": [
+        "total",
+        "active7d",
+        "new30d",
+        "blocked",
+        "deleting"
+      ],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "active7d": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "new30d": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blocked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deleting": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "invites": {
+      "type": "object",
+      "required": [
+        "active",
+        "used",
+        "expired",
+        "revoked"
+      ],
+      "properties": {
+        "active": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "used": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expired": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revoked": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "deletions": {
+      "type": "object",
+      "required": [
+        "purging",
+        "awaitingIdentityRemoval",
+        "overdue"
+      ],
+      "properties": {
+        "purging": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "awaitingIdentityRemoval": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "overdue": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "pipeline": {
+      "type": "object",
+      "required": [
+        "lastHarvest",
+        "lastCycle"
+      ],
+      "properties": {
+        "lastHarvest": {
+          "anyOf": [
+            {
+              "$ref": "Common.schema.json#/$defs/RunSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastCycle": {
+          "anyOf": [
+            {
+              "$ref": "Common.schema.json#/$defs/RunSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "secrets": {
+      "type": "object",
+      "required": [
+        "appleSecretRenewBy",
+        "appleSecretDaysLeft"
+      ],
+      "properties": {
+        "appleSecretRenewBy": {
+          "anyOf": [
+            {
+              "$ref": "Common.schema.json#/$defs/Date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "appleSecretDaysLeft": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "description": "Negative once past due."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "spend": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "todayUsd",
+            "dailyCapUsd",
+            "monthUsd",
+            "monthlyCapUsd",
+            "brakeTripped"
+          ],
+          "properties": {
+            "todayUsd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "dailyCapUsd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "monthUsd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "monthlyCapUsd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "brakeTripped": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "suggestions": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "pendingReview"
+          ],
+          "properties": {
+            "pendingReview": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reports": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "open"
+          ],
+          "properties": {
+            "open": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "generatedAt": "2026-10-21T10:00:00Z",
+      "users": {
+        "total": 6,
+        "active7d": 5,
+        "new30d": 6,
+        "blocked": 0,
+        "deleting": 0
+      },
+      "invites": {
+        "active": 3,
+        "used": 4,
+        "expired": 1,
+        "revoked": 0
+      },
+      "deletions": {
+        "purging": 0,
+        "awaitingIdentityRemoval": 1,
+        "overdue": 0
+      },
+      "pipeline": {
+        "lastHarvest": {
+          "at": "2026-10-21T09:30:04Z",
+          "ok": true
+        },
+        "lastCycle": null
+      },
+      "secrets": {
+        "appleSecretRenewBy": "2027-04-01",
+        "appleSecretDaysLeft": 162
+      },
+      "spend": null,
+      "suggestions": null,
+      "reports": null
+    }
+  ]
+}

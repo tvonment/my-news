@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/ReportRequest.schema.json",
+  "title": "ReportRequest",
+  "description": "Draft (Phase 3; not registered before then). POST /me/reports request. Reports never reach a model; a note needs AI consent (Open decision 5).",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "id",
+    "storyId",
+    "kind"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "Common.schema.json#/$defs/Uuid"
+    },
+    "storyId": {
+      "$ref": "Common.schema.json#/$defs/StoryId"
+    },
+    "kind": {
+      "$ref": "Common.schema.json#/$defs/ReportKind"
+    },
+    "note": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "id": "7d6c5b4a-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
+      "storyId": "s20261021Ab3dE_gH1jKl",
+      "kind": "broken_link"
+    }
+  ]
+}

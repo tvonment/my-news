@@ -3,7 +3,10 @@
 #
 #   cd backend && uv pip compile requirements.in --python-version 3.12 \
 #     --python-platform x86_64-manylinux_2_28 \
-#     --exclude-newer 2026-08-03T09:14:00Z --generate-hashes -o requirements.txt
+#     --exclude-newer 2026-08-03T09:14:00Z \
+#     --exclude-newer-package pyjwt=2026-10-21T00:00:00Z \
+#     --exclude-newer-package msal=2026-10-21T00:00:00Z \
+#     --generate-hashes -o requirements.txt
 #
 # --python-platform resolves for Flex Consumption's Linux x86-64 workers rather
 # than for the machine running the command. --exclude-newer is the instant the
@@ -13,9 +16,18 @@
 # --generate-hashes puts pip in hash-checking mode: a file that differs from the
 # one locked fails the install instead of shipping.
 #
+# Delete requirements.txt before running the command. uv treats the pins in an
+# existing output file as preferences and keeps any that still satisfy the
+# constraints, so compiling over the old lock gives an answer that depends on
+# the old lock rather than on this command: the Phase 1 re-lock kept msal at
+# 1.37.0 that way, where the command alone resolves 1.39.0.
+#
 # Moving that date, or adding a package, is a deliberate re-lock and never a
-# side effect. Phase 1 makes the first one, adding pyjwt 2.15.1 and msal through
-# per-package --exclude-newer-package overrides, and runs the tests on it.
+# side effect. Phase 1 made the first one (2026-10-21): pyjwt 2.15.1 and msal
+# come in through the two per-package --exclude-newer-package overrides above,
+# which move only those two packages past the v1 instant. Everything they pull
+# in transitively (cryptography, requests) still resolves at 2026-08-03, so the
+# rest of the lock is the one the live app already runs.
 #
 # pytest is not listed because it never ships; install it into the venv
 # separately.
@@ -44,5 +56,20 @@ trafilatura>=2.1.0
 PyYAML>=6.0.2
 numpy>=2.1.0
 
-# APNs JWT signing (ES256) for M6.
-pyjwt[crypto]>=2.10.0
+# Entra External ID access-token validation (core/auth.py), and APNs JWT
+# signing (ES256) later. Pinned exactly rather than floored, because auth.py
+# depends on what 2.15 changed in PyJWKClient: 2.13 (the previous lock) refetches
+# the key set for every unknown `kid`, so a stream of tokens with made-up kids
+# becomes a stream of JWKS fetches, and it follows redirects. 2.15 allows one
+# forced refetch per 30-second cooldown, serialises lookups behind a lock and
+# refuses redirects. A token validator is the one dependency whose drift should
+# always be a reviewed change. The crypto extra brings in `cryptography`, without
+# which RS256 verification is unavailable.
+pyjwt[crypto]==2.15.1
+
+# Owner tooling: scripts/get_token.py and scripts/mynews_admin.py sign in with
+# the mynews-cli app registration (public client, auth code + PKCE), and graph-
+# mode identity removal (Later) uses client credentials. azure-identity already
+# depends on it; listing it states that this code imports it directly, so the
+# floor no longer depends on what azure-identity happens to require.
+msal>=1.31.0

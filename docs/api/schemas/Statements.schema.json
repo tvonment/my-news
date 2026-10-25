@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/Statements.schema.json",
+  "title": "Statements",
+  "description": "Draft (Phase 3; not registered before then). PUT /me/statements response.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "statements"
+  ],
+  "properties": {
+    "statements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "createdAt": {
+            "$ref": "Common.schema.json#/$defs/Timestamp"
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 10
+    }
+  },
+  "additionalProperties": false
+}

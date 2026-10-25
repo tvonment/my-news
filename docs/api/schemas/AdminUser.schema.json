@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminUser.schema.json",
+  "title": "AdminUser",
+  "description": "One account as admins see it (users list item; block response). No oid, no email.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "uid",
+    "status",
+    "admin",
+    "createdAt",
+    "lastActiveAt",
+    "inviteLabel",
+    "locale",
+    "languages",
+    "blockedAt"
+  ],
+  "properties": {
+    "uid": {
+      "$ref": "Common.schema.json#/$defs/Uid"
+    },
+    "status": {
+      "$ref": "Common.schema.json#/$defs/MemberStatus"
+    },
+    "admin": {
+      "type": "boolean",
+      "description": "The role last seen on the account's token."
+    },
+    "createdAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "lastActiveAt": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "inviteLabel": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "locale": {
+      "$ref": "Common.schema.json#/$defs/Locale"
+    },
+    "languages": {
+      "$ref": "Common.schema.json#/$defs/Languages"
+    },
+    "blockedAt": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "uid": "3f9a1c0b7d2e4f6a8b1c3d5e7f9a0b2c",
+      "status": "active",
+      "admin": false,
+      "createdAt": "2026-10-21T10:00:00Z",
+      "lastActiveAt": "2026-10-21T10:00:00Z",
+      "inviteLabel": "Family wave 1",
+      "locale": "de-CH",
+      "languages": [
+        "de"
+      ],
+      "blockedAt": null
+    }
+  ]
+}

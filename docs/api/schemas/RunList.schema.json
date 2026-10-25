@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/RunList.schema.json",
+  "title": "RunList",
+  "description": "Draft (Phase 2; not registered before then). GET /admin/runs?kind=&limit=: newest first, at most 50. error is an error class and a short note, never a stack trace.",
+  "x-phase": "P2",
+  "type": "object",
+  "required": [
+    "runs"
+  ],
+  "properties": {
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "startedAt",
+          "finishedAt",
+          "ok",
+          "error",
+          "counters",
+          "estimatedUsd",
+          "ruCharge"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "kind": {
+            "enum": [
+              "harvest",
+              "cycle",
+              "maintenance"
+            ]
+          },
+          "startedAt": {
+            "$ref": "Common.schema.json#/$defs/Timestamp"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "$ref": "Common.schema.json#/$defs/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "counters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "estimatedUsd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ruCharge": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 50
+    }
+  },
+  "additionalProperties": false
+}

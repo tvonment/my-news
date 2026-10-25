@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/FeedbackResult.schema.json",
+  "title": "FeedbackResult",
+  "description": "Draft (Phase 3; not registered before then). POST /me/feedback response: one result per event, in request order. accepted and duplicate delete the outbox item; rejected deletes it as permanent.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "results"
+  ],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "code"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "Common.schema.json#/$defs/Uuid"
+          },
+          "status": {
+            "enum": [
+              "accepted",
+              "duplicate",
+              "rejected"
+            ]
+          },
+          "code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_found",
+                  "invalid",
+                  "stale"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 50
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "results": [
+        {
+          "id": "0b7e3c1a-5d2f-4e8b-9a6c-1f3e5d7b9a2c",
+          "status": "accepted",
+          "code": null
+        },
+        {
+          "id": "2c9d4e6f-7a8b-4c1d-8e2f-3a4b5c6d7e8f",
+          "status": "duplicate",
+          "code": null
+        },
+        {
+          "id": "5e1f2a3b-4c5d-4e6f-9a0b-1c2d3e4f5a6b",
+          "status": "rejected",
+          "code": "not_found"
+        }
+      ]
+    }
+  ]
+}

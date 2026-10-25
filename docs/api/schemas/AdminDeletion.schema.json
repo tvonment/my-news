@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminDeletion.schema.json",
+  "title": "AdminDeletion",
+  "description": "One account deletion (deletions list item; complete response). id is the account's uid. oid is present until the identity is removed, so the owner can find the Entra user; then null.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "id",
+    "status",
+    "identityMode",
+    "oid",
+    "requestedAt",
+    "purgedAt",
+    "identityRemovedAt",
+    "docsDeleted",
+    "overdue"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "Common.schema.json#/$defs/Uid"
+    },
+    "status": {
+      "$ref": "Common.schema.json#/$defs/DeletionStatus"
+    },
+    "identityMode": {
+      "$ref": "Common.schema.json#/$defs/IdentityMode"
+    },
+    "oid": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Oid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requestedAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "purgedAt": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "identityRemovedAt": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "docsDeleted": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "overdue": {
+      "type": "boolean",
+      "description": "Awaiting identity removal for more than 7 days after the purge."
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "id": "3f9a1c0b7d2e4f6a8b1c3d5e7f9a0b2c",
+      "status": "awaiting_identity_removal",
+      "identityMode": "manual",
+      "oid": "4f0d6c1e-8a3b-4c2d-9e7f-1a2b3c4d5e6f",
+      "requestedAt": "2026-10-21T10:00:00Z",
+      "purgedAt": "2026-10-21T10:04:30Z",
+      "identityRemovedAt": null,
+      "docsDeleted": 412,
+      "overdue": false
+    },
+    {
+      "id": "3f9a1c0b7d2e4f6a8b1c3d5e7f9a0b2c",
+      "status": "completed",
+      "identityMode": "manual",
+      "oid": null,
+      "requestedAt": "2026-10-21T10:00:00Z",
+      "purgedAt": "2026-10-21T10:04:30Z",
+      "identityRemovedAt": "2026-10-22T08:00:00Z",
+      "docsDeleted": 412,
+      "overdue": false
+    }
+  ]
+}

@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/StoryCard.schema.json",
+  "title": "StoryCard",
+  "description": "Draft (Phase 3; not registered before then). One story in a brief or a list. title and teaser are the publisher's own text, never machine-translated; summaryFirst is AI text (Tier A only), attached at response time.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "url",
+    "publisher",
+    "publishedAt",
+    "lang",
+    "section",
+    "tags",
+    "contentType",
+    "teaser",
+    "summaryFirst",
+    "summaryStatus",
+    "byline",
+    "outletsCount",
+    "paywalled",
+    "satire",
+    "isUpdate",
+    "reasons",
+    "my"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "Common.schema.json#/$defs/StoryId"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "url": {
+      "$ref": "Common.schema.json#/$defs/Url"
+    },
+    "publisher": {
+      "$ref": "Common.schema.json#/$defs/PublisherRef"
+    },
+    "publishedAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "lang": {
+      "$ref": "Common.schema.json#/$defs/SourceLanguage"
+    },
+    "section": {
+      "$ref": "Common.schema.json#/$defs/SectionRef"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "$ref": "Common.schema.json#/$defs/Ref"
+      },
+      "maxItems": 5
+    },
+    "contentType": {
+      "$ref": "Common.schema.json#/$defs/ContentType"
+    },
+    "teaser": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "summaryFirst": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "summaryStatus": {
+      "enum": [
+        "ready",
+        "pending",
+        "not_allowed",
+        "unavailable"
+      ]
+    },
+    "byline": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "outletsCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "paywalled": {
+      "type": "boolean"
+    },
+    "satire": {
+      "type": "boolean"
+    },
+    "isUpdate": {
+      "type": "boolean"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "$ref": "Common.schema.json#/$defs/Reason"
+      },
+      "maxItems": 6
+    },
+    "my": {
+      "type": "object",
+      "required": [
+        "read",
+        "saved",
+        "reaction"
+      ],
+      "properties": {
+        "read": {
+          "type": "boolean"
+        },
+        "saved": {
+          "type": "boolean"
+        },
+        "reaction": {
+          "anyOf": [
+            {
+              "enum": [
+                "more",
+                "less",
+                "hide"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "id": "s20261021Ab3dE_gH1jKl",
+      "title": "Bundesrat legt Botschaft zur KI-Regulierung vor",
+      "url": "https://www.srf.ch/news/schweiz/ki-regulierung",
+      "publisher": {
+        "id": "srf-news",
+        "name": "SRF News"
+      },
+      "publishedAt": "2026-10-21T04:12:00Z",
+      "lang": "de",
+      "section": {
+        "id": "switzerland",
+        "label": "Schweiz"
+      },
+      "tags": [
+        {
+          "id": "bundesrat",
+          "label": "Bundesrat"
+        },
+        {
+          "id": "ai-regulation",
+          "label": "KI-Regulierung"
+        }
+      ],
+      "contentType": "report",
+      "teaser": "Der Bundesrat will KI-Anwendungen mit hohem Risiko strenger regeln.",
+      "summaryFirst": null,
+      "summaryStatus": "not_allowed",
+      "byline": null,
+      "outletsCount": 6,
+      "paywalled": false,
+      "satire": false,
+      "isUpdate": false,
+      "reasons": [
+        {
+          "code": "follow_section",
+          "target": {
+            "type": "section",
+            "id": "switzerland",
+            "label": "Schweiz"
+          },
+          "count": null
+        },
+        {
+          "code": "coverage",
+          "target": null,
+          "count": 6
+        }
+      ],
+      "my": {
+        "read": false,
+        "saved": false,
+        "reaction": null
+      }
+    }
+  ]
+}

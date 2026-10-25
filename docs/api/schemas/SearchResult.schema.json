@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/SearchResult.schema.json",
+  "title": "SearchResult",
+  "description": "Draft (Phase 3; not registered before then). POST /stories/search response, over the live pool.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "stories",
+    "sections",
+    "tags",
+    "sources"
+  ],
+  "properties": {
+    "stories": {
+      "type": "array",
+      "items": {
+        "$ref": "StoryCard.schema.json"
+      },
+      "maxItems": 20
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "Common.schema.json#/$defs/SectionRef"
+      },
+      "maxItems": 9
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "$ref": "Common.schema.json#/$defs/Ref"
+      },
+      "maxItems": 10
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "Common.schema.json#/$defs/PublisherRef"
+      },
+      "maxItems": 10
+    }
+  },
+  "additionalProperties": false
+}

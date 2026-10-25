@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminSuggestionList.schema.json",
+  "title": "AdminSuggestionList",
+  "description": "Draft (Phase 3; not registered before then). GET /admin/suggestions?status=: newest first, at most 200.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "suggestions"
+  ],
+  "properties": {
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "$ref": "AdminSuggestion.schema.json"
+      },
+      "maxItems": 200
+    }
+  },
+  "additionalProperties": false
+}

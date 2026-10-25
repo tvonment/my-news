@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/DescribeResult.schema.json",
+  "title": "DescribeResult",
+  "description": "Draft (Phase 3; not registered before then). POST /me/describe response: proposals only; nothing changes on the server.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "proposals",
+    "unmatched"
+  ],
+  "properties": {
+    "proposals": {
+      "type": "object",
+      "required": [
+        "follow",
+        "mute",
+        "statements"
+      ],
+      "properties": {
+        "follow": {
+          "type": "array",
+          "items": {
+            "$ref": "Common.schema.json#/$defs/TopicTarget"
+          },
+          "maxItems": 20
+        },
+        "mute": {
+          "type": "array",
+          "items": {
+            "$ref": "Common.schema.json#/$defs/TopicTarget"
+          },
+          "maxItems": 20
+        },
+        "statements": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "maxItems": 10
+        }
+      },
+      "additionalProperties": false
+    },
+    "unmatched": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "maxItems": 20
+    }
+  },
+  "additionalProperties": false
+}

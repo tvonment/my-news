@@ -42,6 +42,7 @@ ITEMS = f"{DATABASE}/containers/items"
 NEWS = f"{DATABASE}/containers/news"
 FOUNDRY = f"{RG}/Microsoft.CognitiveServices/accounts/aif-mynews-test"
 SITE = f"{RG}/Microsoft.Web/sites/func-mynews-test"
+APPSETTINGS = f"{SITE}/config/appsettings"
 PLAN = f"{RG}/Microsoft.Web/serverfarms/plan-mynews-test"
 
 PERIODIC = {
@@ -111,8 +112,14 @@ def site(always_ready=None):
     return {"properties": {"functionAppConfig": {"scaleAndConcurrency": scale}}}
 
 
-def judge(*changes, allow=(), **extra):
-    return guard.evaluate(whatif(*changes, **extra), frozenset(allow))
+def settings(*names):
+    # Values in the clear, as what-if shows them: the tests check none is printed.
+    return {"name": "appsettings", "type": "Microsoft.Web/sites/config",
+            "properties": {name: f"value-of-{name}" for name in names}}
+
+
+def judge(*changes, allow=(), live=None, **extra):
+    return guard.evaluate(whatif(*changes, **extra), frozenset(allow), live)
 
 
 FLOAT16 = {"vectorEmbeddings": [{"path": "/embedding", "dataType": "float16",
@@ -144,7 +151,7 @@ def test_rule_ids_are_the_published_interface():
     assert guard.RULE_IDS == (
         "delete", "cosmos-free-tier", "cosmos-locations", "cosmos-capabilities-removed",
         "cosmos-backup", "cosmos-partition-key", "cosmos-vector-policy", "cosmos-throughput",
-        "foundry-sku", "always-ready", "plan-sku",
+        "foundry-sku", "always-ready", "plan-sku", "app-settings-removed",
     )
 
 
@@ -382,6 +389,63 @@ class TestPlanSku:
         assert judge(change(PLAN, "Create", after={"sku": {"name": "FC1", "tier": "FlexConsumption"}})).blocked == []
 
 
+PHASE_0_SETTINGS = ("AzureWebJobsStorage__accountName", "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                    "COSMOS_ENDPOINT", "COSMOS_DATABASE", "COSMOS_CONTAINER", "HARVEST_SCHEDULE")
+
+
+class TestAppSettingsRemoved:
+    def _replace(self, *names):
+        # What-if can't read the live settings, so it always shows them as new.
+        return change(APPSETTINGS, "Modify", None, settings(*names), [prop("properties", "Create")])
+
+    def test_a_live_setting_the_template_leaves_out_blocks(self):
+        report = judge(self._replace(*PHASE_0_SETTINGS), live=[*PHASE_0_SETTINGS, "HAND_SET"])
+        assert report.blocked == ["app-settings-removed"]
+        assert report.findings["app-settings-removed"] == [
+            "HAND_SET: set on the app now and missing from the template, so this provision deletes it"]
+        assert "value-of-" not in report.render()
+
+    def test_every_live_setting_kept_passes_and_names_compare_without_case(self):
+        live = [name.lower() for name in PHASE_0_SETTINGS]
+        report = judge(self._replace(*PHASE_0_SETTINGS, "ENTRA_TENANT_ID"), live=live)
+        assert report.blocked == []
+        assert "value-of-" not in report.render()
+
+    def test_a_name_on_the_removable_list_passes(self, monkeypatch):
+        monkeypatch.setattr(guard, "REMOVABLE_SETTINGS", frozenset({"LEGACY_COSMOS_CONTAINER"}))
+        report = judge(self._replace(*PHASE_0_SETTINGS), live=[*PHASE_0_SETTINGS, "legacy_cosmos_container"])
+        assert report.blocked == []
+
+    def test_allowing_the_rule_lets_the_removal_through(self):
+        report = judge(self._replace("COSMOS_ENDPOINT"), live=["COSMOS_ENDPOINT", "HAND_SET"],
+                       allow={"app-settings-removed"})
+        assert report.blocked == [] and report.allowed == ["app-settings-removed"]
+
+    def test_without_live_names_it_says_so_and_passes(self):
+        report = judge(self._replace(*PHASE_0_SETTINGS))
+        assert report.blocked == []
+        assert any("app-settings-removed: not checked" in line for line in report.render().splitlines())
+
+    def test_a_provision_that_writes_no_settings_passes(self):
+        report = judge(change(COSMOS, "NoChange", account(), account()), live=["HAND_SET"])
+        assert report.blocked == [] and report.warnings == []
+
+    def test_an_unsupported_settings_resource_blocks(self):
+        report = judge(change(APPSETTINGS, "Unsupported", unsupportedReason="reference() of another module"),
+                       live=list(PHASE_0_SETTINGS))
+        assert report.blocked == ["app-settings-removed"]
+        assert "reference() of another module" in report.findings["app-settings-removed"][0]
+
+    def test_settings_written_through_site_config_count(self):
+        # Phase 0's template put the list on the site itself.
+        after = {"properties": {"siteConfig": {"appSettings": [
+            {"name": name, "value": f"value-of-{name}"} for name in PHASE_0_SETTINGS]}}}
+        assert judge(change(SITE, "Modify", None, after), live=list(PHASE_0_SETTINGS)).blocked == []
+        report = judge(change(SITE, "Modify", None, after), live=[*PHASE_0_SETTINGS, "HAND_SET"])
+        assert report.blocked == ["app-settings-removed"]
+        assert "value-of-" not in report.render()
+
+
 # --- WHATIF_ALLOW -------------------------------------------------------------
 
 
@@ -459,11 +523,12 @@ def test_unsupported_resources_are_shown_and_their_rules_marked_unchecked():
                    diagnostics=[{"level": "Warning", "code": "NestedDeploymentShortCircuited",
                                  "target": "functions", "message": "skipped"}])
     assert report.blocked == []
-    assert report.not_checked() == ["always-ready", "plan-sku"]
+    # app-settings-removed watches the site too: Phase 0 wrote the settings there.
+    assert report.not_checked() == ["always-ready", "plan-sku", "app-settings-removed"]
     text = report.render()
     assert f"  x Unsupported Microsoft.Web/sites/func-mynews-test: {reason}" in text
     assert "  ! Warning NestedDeploymentShortCircuited at functions: skipped" in text
-    assert "  not checked, their resources were Unsupported: always-ready, plan-sku" in text
+    assert "  not checked, their resources were Unsupported: always-ready, plan-sku, app-settings-removed" in text
 
 
 def test_unknown_change_types_count_as_writes():
@@ -507,6 +572,34 @@ def test_cli_exits_2_on_input_it_cannot_judge(tmp_path, capsys, content):
     path.write_text(content)
     assert guard.main([str(path)], environ={}) == 2
     assert capsys.readouterr().err.startswith("whatif_guard: ")
+
+
+def test_cli_compares_the_live_setting_names_it_is_given(tmp_path, capsys):
+    path = tmp_path / "whatif.json"
+    path.write_text(json.dumps(whatif(change(APPSETTINGS, "Modify", None, settings("COSMOS_ENDPOINT"),
+                                             [prop("properties", "Create")]))))
+    live = tmp_path / "live.json"
+    live.write_text(json.dumps(["COSMOS_ENDPOINT", "HAND_SET"]))
+    assert guard.main([str(path), "--live-settings", str(live)], environ={}) == 1
+    assert "HAND_SET: set on the app now" in capsys.readouterr().out
+    live.write_text(json.dumps(["COSMOS_ENDPOINT"]))
+    assert guard.main(["--live-settings", str(live), str(path)], environ={}) == 0
+
+
+@pytest.mark.parametrize("content", ["", "not json", '{"names": []}', '["ok", 3]', '[""]'])
+def test_cli_exits_2_on_live_settings_it_cannot_read(tmp_path, capsys, content):
+    path = tmp_path / "whatif.json"
+    path.write_text(json.dumps(whatif()))
+    live = tmp_path / "live.json"
+    live.write_text(content)
+    assert guard.main([str(path), "--live-settings", str(live)], environ={}) == 2
+    assert capsys.readouterr().err.startswith("whatif_guard: --live-settings")
+
+
+def test_cli_needs_a_file_after_live_settings(capsys):
+    assert guard.main(["whatif.json", "--live-settings"], environ={}) == 2
+    assert guard.main(["--unknown"], environ={}) == 2
+    assert capsys.readouterr().err.startswith("usage:")
 
 
 def test_cli_exits_2_on_a_missing_file(tmp_path):

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminReport.schema.json",
+  "title": "AdminReport",
+  "description": "Draft (Phase 3; not registered before then). One problem report. reporter becomes \"deleted\" once the reporter's account is purged.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "id",
+    "storyId",
+    "kind",
+    "note",
+    "status",
+    "resolution",
+    "createdAt",
+    "resolvedAt",
+    "reporter"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "Common.schema.json#/$defs/Uuid"
+    },
+    "storyId": {
+      "$ref": "Common.schema.json#/$defs/StoryId"
+    },
+    "kind": {
+      "$ref": "Common.schema.json#/$defs/ReportKind"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "enum": [
+        "open",
+        "resolved"
+      ]
+    },
+    "resolution": {
+      "anyOf": [
+        {
+          "enum": [
+            "fixed",
+            "no_action",
+            "source_flagged"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "$ref": "Common.schema.json#/$defs/Timestamp"
+    },
+    "resolvedAt": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reporter": {
+      "anyOf": [
+        {
+          "$ref": "Common.schema.json#/$defs/Uid"
+        },
+        {
+          "const": "deleted"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

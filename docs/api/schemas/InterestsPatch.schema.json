@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/InterestsPatch.schema.json",
+  "title": "InterestsPatch",
+  "description": "Draft (Phase 3; not registered before then). PATCH /me/interests: an idempotent change list. until (mute only) is absolute; null or absent means always.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "changes"
+  ],
+  "properties": {
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "state"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "section",
+              "tag"
+            ]
+          },
+          "id": {
+            "$ref": "Common.schema.json#/$defs/Slug"
+          },
+          "state": {
+            "$ref": "Common.schema.json#/$defs/FollowState"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "$ref": "Common.schema.json#/$defs/InputTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 50
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "changes": [
+        {
+          "type": "tag",
+          "id": "eu-ai-act",
+          "state": "follow"
+        },
+        {
+          "type": "section",
+          "id": "business",
+          "state": "mute",
+          "until": "2026-10-28T10:00:00Z"
+        }
+      ]
+    }
+  ]
+}

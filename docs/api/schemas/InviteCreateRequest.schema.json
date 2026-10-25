@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/InviteCreateRequest.schema.json",
+  "title": "InviteCreateRequest",
+  "description": "POST /admin/invites request. Not idempotent: every call mints new codes.",
+  "x-phase": "P1",
+  "type": "object",
+  "required": [
+    "label"
+  ],
+  "properties": {
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "maxUses": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "default": 1
+    },
+    "expiresInDays": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 90,
+      "default": 30
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "default": 1
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "label": "Family wave 1",
+      "maxUses": 1,
+      "expiresInDays": 30,
+      "count": 3
+    },
+    {
+      "label": "App Review",
+      "maxUses": 5,
+      "expiresInDays": 60
+    }
+  ]
+}

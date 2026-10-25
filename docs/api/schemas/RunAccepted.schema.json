@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/RunAccepted.schema.json",
+  "title": "RunAccepted",
+  "description": "Draft (Phase 2; not registered before then). POST /admin/runs/harvest|cycle, 202: the ops-jobs message id.",
+  "x-phase": "P2",
+  "type": "object",
+  "required": [
+    "jobId"
+  ],
+  "properties": {
+    "jobId": {
+      "$ref": "Common.schema.json#/$defs/Uuid"
+    }
+  },
+  "additionalProperties": false
+}

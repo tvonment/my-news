@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/AdminReportList.schema.json",
+  "title": "AdminReportList",
+  "description": "Draft (Phase 3; not registered before then). GET /admin/reports?status=open: newest first, at most 200.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "reports"
+  ],
+  "properties": {
+    "reports": {
+      "type": "array",
+      "items": {
+        "$ref": "AdminReport.schema.json"
+      },
+      "maxItems": 200
+    }
+  },
+  "additionalProperties": false
+}

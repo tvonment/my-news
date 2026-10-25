@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/BriefMore.schema.json",
+  "title": "BriefMore",
+  "description": "Draft (Phase 3; not registered before then). GET /brief/more: at most 30 further cards for the same edition.",
+  "x-phase": "P3",
+  "type": "object",
+  "required": [
+    "editionId",
+    "stories",
+    "hiddenByFilters"
+  ],
+  "properties": {
+    "editionId": {
+      "$ref": "Common.schema.json#/$defs/EditionId"
+    },
+    "stories": {
+      "type": "array",
+      "items": {
+        "$ref": "StoryCard.schema.json"
+      },
+      "maxItems": 30
+    },
+    "hiddenByFilters": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}

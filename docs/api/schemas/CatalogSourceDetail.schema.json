@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvonment.github.io/my-news/api/schemas/CatalogSourceDetail.schema.json",
+  "title": "CatalogSourceDetail",
+  "description": "Draft (Phase 3; not registered before then). GET /catalog/{id}: a CatalogSource plus its recent headlines.",
+  "x-phase": "P3",
+  "$ref": "Catalog.schema.json#/$defs/CatalogSource",
+  "required": [
+    "recentHeadlines"
+  ],
+  "properties": {
+    "recentHeadlines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "title",
+          "url",
+          "publishedAt"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "url": {
+            "$ref": "Common.schema.json#/$defs/Url"
+          },
+          "publishedAt": {
+            "$ref": "Common.schema.json#/$defs/Timestamp"
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 10
+    }
+  },
+  "unevaluatedProperties": false
+}
